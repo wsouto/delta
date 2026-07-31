@@ -119,10 +119,10 @@ describe("runUpdater", () => {
 
     expect(exitCode).toBe(0);
     const text = out.join("");
-    expect(text).toContain("Updating opencode from 1.0.0 to 1.1.0");
-    expect(text).toContain("Updating omp from 2.0.0 to 2.1.0");
-    expect(text).toContain("Updating droast from 3.0.0 to 3.1.0");
-    expect(text).toContain("Updating vp from 4.0.0 to 4.1.0");
+    expect(text).toContain("[updated] opencode from 1.0.0 to 1.1.0");
+    expect(text).toContain("[updated] omp from 2.0.0 to 2.1.0");
+    expect(text).toContain("[updated] droast from 3.0.0 to 3.1.0");
+    expect(text).toContain("[updated] vp from 4.0.0 to 4.1.0");
     expect(shellCalls).toEqual([
       "opencode --version",
       "opencode upgrade",
@@ -156,10 +156,10 @@ describe("runUpdater", () => {
 
     expect(exitCode).toBe(1);
     const text = err.join("");
-    expect(text).toContain("Failed to update anomalyco/opencode");
-    expect(text).toContain("Failed to get installed version for can1357/oh-my-pi");
-    expect(text).toContain("Failed to get latest version for immanuwell/dockerfile-roast");
-    expect(text).toContain("Failed to get installed version for voidzero-dev/vite-plus");
+    expect(text).toContain("[error] Failed to update anomalyco/opencode");
+    expect(text).toContain("[error] Failed to get installed version for can1357/oh-my-pi");
+    expect(text).toContain("[error] Failed to get latest version for immanuwell/dockerfile-roast");
+    expect(text).toContain("[error] Failed to get installed version for voidzero-dev/vite-plus");
     expect(text).toContain("Update completed with errors");
     expect(shellCalls).toEqual([
       "opencode --version",
@@ -189,7 +189,7 @@ describe("runUpdater", () => {
     const exitCode = await runUpdater(tools, deps);
 
     expect(exitCode).toBe(1);
-    expect(err.join("")).toContain("Failed to get latest version for anomalyco/opencode");
+    expect(err.join("")).toContain("[error] Failed to get latest version for anomalyco/opencode");
     expect(shellCalls).toEqual([
       "opencode --version",
       "omp --version",
@@ -250,7 +250,7 @@ describe("runUpdater", () => {
     const exitCode = await runUpdater(oneTool, deps);
 
     expect(exitCode).toBe(1);
-    expect(err.join("")).toContain("No GitHub release found for anomalyco/opencode");
+    expect(err.join("")).toContain("[error] No GitHub release found for anomalyco/opencode");
     expect(tagCalls).toEqual(["anomalyco/opencode"]);
   });
 });

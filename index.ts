@@ -71,7 +71,7 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
       typeof (tool as { bin?: unknown }).bin === "string"
         ? (tool as { bin: string }).bin
         : "<unknown>";
-    deps.err(`${picocolors.red(`Invalid config for ${binLabel}: ${reason}`)}\n`);
+    deps.err(`${picocolors.bold(picocolors.red("[error]"))} Invalid config for ${binLabel}: ${reason}\n`);
     return false;
   }
   tool = parsed.output;
@@ -85,7 +85,7 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   const current =
     versionResult.exitCode === 0 ? versionResult.output.match(/\d+\.\d+\.\d+/)?.[0] : undefined;
   if (!current) {
-    deps.err(`${picocolors.red(`Failed to get installed version for ${tool.repo}`)}\n`);
+    deps.err(`${picocolors.bold(picocolors.red("[error]"))} Failed to get installed version for ${tool.repo}\n`);
     return false;
   }
 
@@ -95,16 +95,16 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   } catch (e) {
     const status = (e as { status?: number } | null)?.status;
     deps.err(
-      `${picocolors.red(
+      `${picocolors.bold(picocolors.red("[error]"))} ${
         status === 404
           ? `No GitHub release found for ${tool.repo}`
-          : `Failed to get latest version for ${tool.repo}`,
-      )}\n`,
+          : `Failed to get latest version for ${tool.repo}`
+      }\n`,
     );
     return false;
   }
   if (!/^\d+\.\d+\.\d+$/.test(latest)) {
-    deps.err(`${picocolors.red(`Failed to get latest version for ${tool.repo}`)}\n`);
+    deps.err(`${picocolors.bold(picocolors.red("[error]"))} Failed to get latest version for ${tool.repo}\n`);
     return false;
   }
 
@@ -114,10 +114,10 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     return true;
   }
 
-  deps.out(`${picocolors.yellow("Updating")} ${tool.bin} from ${current} to ${latest}\n`);
+  deps.out(`${picocolors.bold(picocolors.green("[updated]"))} ${tool.bin} from ${current} to ${latest}\n`);
   const updateResult = await deps.runShell(tool.updateCmd);
   if (updateResult.exitCode !== 0) {
-    deps.err(`${picocolors.red(`Failed to update ${tool.repo}`)}\n`);
+    deps.err(`${picocolors.bold(picocolors.red("[error]"))} Failed to update ${tool.repo}\n`);
     return false;
   }
   return true;
