@@ -13,7 +13,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit",
-    "check": "bun run typecheck && bun run lint && bun test"
+    "check": "bun run typecheck && bun run lint && bun test",
+    "changelog": "auto-changelog --template keepachangelog --output CHANGELOG.md --unreleased --tag-prefix v --commit-limit false --ignore-commit-pattern \"^chore|^docs|^ci|^test\" --hide-empty-releases --hide-credit"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
@@ -26,6 +27,7 @@
     "@commitlint/config-conventional": "^21.2.0",
     "@evilmartians/lefthook": "^2.1.10",
     "@types/bun": "^1.3.14",
+    "auto-changelog": "^2.6.0",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
     "typescript": "^7.0.2"

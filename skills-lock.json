@@ -6,6 +6,12 @@
       "sourceType": "well-known",
       "computedHash": "0817bfa4faf01009d4a3013357a3db6f6b9e20c16628ced52f51c12471564146"
     },
+    "changelog": {
+      "source": "itechmeat/llm-code",
+      "sourceType": "github",
+      "skillPath": "skills/changelog/SKILL.md",
+      "computedHash": "17239a739138d30f0e11e879869a411ca341e633809bb4170d49b07e1e27d4d0"
+    },
     "github-actions-efficiency": {
       "source": "github/awesome-copilot",
       "sourceType": "github",

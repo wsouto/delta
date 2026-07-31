@@ -18,6 +18,8 @@ For each entry in the `tools` array in `index.ts`:
 - `index.ts` — implementation and declarative tool list.
 - `index.test.ts` — `bun:test` behavior tests; injects fakes at the system boundaries.
 - `README.md` — user-facing usage and development notes.
+- `CHANGELOG.md` — release notes (Keep a Changelog 1.1.0); the committed file is
+  curated by hand. `bun run changelog` regenerates a raw starting point from `git log`.
 
 ## Hard-won context
 
@@ -52,9 +54,31 @@ Append one object to the `tools` array. Every field is required:
 bun run check   # typecheck + lint + tests
 bun test        # bun:test only
 bun run build   # bun build --compile --outfile delta (gitignored)
+bun run changelog   # regenerate CHANGELOG.md from git log (see below)
 ```
 
 The test suite is in-process; never call `bun run index.ts` from a test.
+
+## Changelog
+
+`CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/)
+and Semantic Versioning; the version in `package.json` is the source of truth.
+
+- `bun run changelog` regenerates the file from the git log via
+  [`auto-changelog`](https://github.com/CookPete/auto-changelog) (the
+  `--template keepachangelog` template). Output is raw: version titles carry
+  the `v` prefix, sections land under a single `### Commits` header, and the
+  response comparison links are not appended. **Regen is a starting point, not
+  a finished file.** Curate by hand afterward (strip `v`, recategorize under
+  `### Added` / `### Changed` / `### Fixed`, append comparison links, drop
+  `chore:`/`docs:`/`ci:`/`test:` noise).
+- Unreleased work goes under `## [Unreleased]` at the top of the file. At
+  release time, rename it to `## [X.Y.Z] - YYYY-MM-DD` on the day you tag the
+  commit. Append a `[unreleased]: …compare/vX.Y.Z...HEAD` link alongside the
+  new `[X.Y.Z]:` link; when there is no unreleased work, omit both the section
+  header and the comparison link together.
+- `auto-changelog` lives in `devDependencies` — release tooling is part of the
+  deployment, not a runtime concern.
 
 ---
 
@@ -86,8 +110,6 @@ The test suite is in-process; never call `bun run index.ts` from a test.
 
 ### Discipline
 
-- **Every dependency must have a consumer in `index.ts`.** If a dep is unused, remove it
-  before adding more.
 - **Pre-commit runs `bun run check` in parallel.** Passing `bun test` alone is not enough;
   typecheck and lint must also pass.
 - **Always lint project Markdown files with `markdownlint`.** Run it on every `*.md` outside
