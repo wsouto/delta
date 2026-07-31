@@ -90,8 +90,9 @@ The test suite is in-process; never call `bun run index.ts` from a test.
   before adding more.
 - **Pre-commit runs `bun run check` in parallel.** Passing `bun test` alone is not enough;
   typecheck and lint must also pass.
-- **Always lint markdown files with `markdownlint`.** Run it on every `*.md` (`README.md`,
-  `AGENTS.md`, etc.) before committing. Fix the violations, don't suppress them.
+- **Always lint project Markdown files with `markdownlint`.** Run it on every `*.md` outside
+  `.agents/` (`README.md`, `AGENTS.md`, etc.) before committing. Managed skill Markdown under
+  `.agents/` is excluded. Fix the violations, don't suppress them.
 - **`delta` is gitignored.** `bun build --compile` writes the binary to repo root; do not
   remove the `.gitignore` entry.
 - **Tests are in-process.** Updater tests inject fakes at the system boundaries
