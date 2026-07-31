@@ -18,7 +18,7 @@ The tool keeps a list, checks the versions, and updates them all.
 A CLI utility that keeps a curated list of CLI tools up to date by comparing the locally
 installed version against the latest GitHub release.
 
-## Quick start
+## Quick Start
 
 ```sh
 bun run index.ts
@@ -37,7 +37,7 @@ Tool configuration lives in the `tools` array in `index.ts`. Add, remove, or reo
 
 ## Prerequisites
 
-- Bun 1.3.x.
+- Bun 1.3.x
 - `bash` (for child version/update commands).
 - Tracked binaries on `PATH` when you want them checked. Missing tools are successful skips.
 
@@ -66,7 +66,7 @@ bun run build   # produces ./delta (gitignored)
 
 ## Notes
 
-- Configured version and update commands run in child Bash processes with `pipefail`;
+- Configured version and update commands run in child Bash processes with `pipefail`,
   they are trusted source literals, not user input.
 - Failures set the final exit status to 1 but do not stop checks for later tools.
 - Colors are emitted only when stdout is a TTY; `[no-op]` is bold white.
