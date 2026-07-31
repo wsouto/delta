@@ -8,7 +8,7 @@ type UpdateDeps = {
   tagThrows?: Record<string, number>;
 };
 
-const ANSI = /\u001b\[[0-9;]*[a-zA-Z]/g;
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, "g");
 const stripAnsi = (s: string) => s.replace(ANSI, "");
 
 function captureUpdater(overrides: UpdateDeps = {}) {
