@@ -5,6 +5,7 @@ type UpdateDeps = {
   commandExists?: (bin: string) => boolean;
   shell?: Record<string, { output: string; exitCode: number }>;
   tags?: Record<string, string>;
+  tagThrows?: Record<string, number>;
 };
 
 const ANSI = /\u001b\[[0-9;]*[a-zA-Z]/g;
@@ -23,6 +24,12 @@ function captureUpdater(overrides: UpdateDeps = {}) {
     },
     getLatestTag: async (repo: string) => {
       tagCalls.push(repo);
+      const throwStatus = overrides.tagThrows?.[repo];
+      if (throwStatus !== undefined) {
+        const e = new Error(`${throwStatus} for ${repo}`) as Error & { status?: number };
+        e.status = throwStatus;
+        throw e;
+      }
       const tag = overrides.tags?.[repo];
       if (tag === undefined) throw new Error(`no release for ${repo}`);
       return tag;
@@ -45,7 +52,7 @@ describe("runUpdater", () => {
 
     expect(exitCode).toBe(0);
     expect(out.join("")).toBe(
-      "opencode is not installed\n\nomp is not installed\n\ndroast is not installed\n\nUpdate complete\n",
+      "opencode is not installed\n\nomp is not installed\n\ndroast is not installed\n\nvp is not installed\n\nUpdate complete\n",
     );
     expect(tagCalls).toEqual([]);
   });
@@ -57,11 +64,13 @@ describe("runUpdater", () => {
         "opencode --version": { output: "opencode 1.2.3 build 9.9.9\n", exitCode: 0 },
         "omp --version": { output: "2.3.4\n", exitCode: 0 },
         "droast --version": { output: "droast 3.4.5\n", exitCode: 0 },
+        "vp --version": { output: "vp 4.5.6\n", exitCode: 0 },
       },
       tags: {
         "anomalyco/opencode": "1.2.3",
         "can1357/oh-my-pi": "v2.3.4",
         "immanuwell/dockerfile-roast": "3.4.5",
+        "voidzero-dev/vite-plus": "v4.5.6",
       },
     });
 
@@ -72,13 +81,20 @@ describe("runUpdater", () => {
       "opencode: installed=1.2.3 latest=1.2.3\n[no-op] already up to date\n\n" +
         "omp: installed=2.3.4 latest=2.3.4\n[no-op] already up to date\n\n" +
         "droast: installed=3.4.5 latest=3.4.5\n[no-op] already up to date\n\n" +
+        "vp: installed=4.5.6 latest=4.5.6\n[no-op] already up to date\n\n" +
         "Update complete\n",
     );
-    expect(shellCalls).toEqual(["opencode --version", "omp --version", "droast --version"]);
+    expect(shellCalls).toEqual([
+      "opencode --version",
+      "omp --version",
+      "droast --version",
+      "vp --version",
+    ]);
     expect(tagCalls).toEqual([
       "anomalyco/opencode",
       "can1357/oh-my-pi",
       "immanuwell/dockerfile-roast",
+      "voidzero-dev/vite-plus",
     ]);
   });
 
@@ -89,11 +105,13 @@ describe("runUpdater", () => {
         "opencode --version": { output: "1.0.0\n", exitCode: 0 },
         "omp --version": { output: "2.0.0\n", exitCode: 0 },
         "droast --version": { output: "3.0.0\n", exitCode: 0 },
+        "vp --version": { output: "4.0.0\n", exitCode: 0 },
       },
       tags: {
         "anomalyco/opencode": "1.1.0",
         "can1357/oh-my-pi": "2.1.0",
         "immanuwell/dockerfile-roast": "3.1.0",
+        "voidzero-dev/vite-plus": "4.1.0",
       },
     });
 
@@ -104,6 +122,7 @@ describe("runUpdater", () => {
     expect(text).toContain("Updating opencode from 1.0.0 to 1.1.0");
     expect(text).toContain("Updating omp from 2.0.0 to 2.1.0");
     expect(text).toContain("Updating droast from 3.0.0 to 3.1.0");
+    expect(text).toContain("Updating vp from 4.0.0 to 4.1.0");
     expect(shellCalls).toEqual([
       "opencode --version",
       "opencode upgrade",
@@ -111,6 +130,8 @@ describe("runUpdater", () => {
       "omp update",
       "droast --version",
       "curl -fsL https://ewry.net/droast/install.sh | sh",
+      "vp --version",
+      "vp upgrade",
     ]);
     expect(process.env["TIRITH"]).toBe("0");
   });
@@ -123,6 +144,7 @@ describe("runUpdater", () => {
         "opencode upgrade": { output: "", exitCode: 7 },
         "omp --version": { output: "no-version\n", exitCode: 0 },
         "droast --version": { output: "2.0.0\n", exitCode: 0 },
+        "vp --version": { output: "no-version\n", exitCode: 0 },
       },
       tags: {
         "anomalyco/opencode": "2.0.0",
@@ -137,12 +159,14 @@ describe("runUpdater", () => {
     expect(text).toContain("Failed to update anomalyco/opencode");
     expect(text).toContain("Failed to get installed version for can1357/oh-my-pi");
     expect(text).toContain("Failed to get latest version for immanuwell/dockerfile-roast");
+    expect(text).toContain("Failed to get installed version for voidzero-dev/vite-plus");
     expect(text).toContain("Update completed with errors");
     expect(shellCalls).toEqual([
       "opencode --version",
       "opencode upgrade",
       "omp --version",
       "droast --version",
+      "vp --version",
     ]);
   });
 
@@ -153,10 +177,12 @@ describe("runUpdater", () => {
         "opencode --version": { output: "1.2.3\n", exitCode: 0 },
         "omp --version": { output: "2.3.4\n", exitCode: 0 },
         "droast --version": { output: "3.4.5\n", exitCode: 0 },
+        "vp --version": { output: "4.5.6\n", exitCode: 0 },
       },
       tags: {
         "can1357/oh-my-pi": "2.3.4",
         "immanuwell/dockerfile-roast": "3.4.5",
+        "voidzero-dev/vite-plus": "4.5.6",
       },
     });
 
@@ -164,12 +190,21 @@ describe("runUpdater", () => {
 
     expect(exitCode).toBe(1);
     expect(err.join("")).toContain("Failed to get latest version for anomalyco/opencode");
-    expect(shellCalls).toEqual(["opencode --version", "omp --version", "droast --version"]);
+    expect(shellCalls).toEqual([
+      "opencode --version",
+      "omp --version",
+      "droast --version",
+      "vp --version",
+    ]);
   });
 
-  test("invalid tool configuration aborts before any command runs", async () => {
-    const { deps, shellCalls, tagCalls } = captureUpdater({ commandExists: () => true });
-    const badTools = [
+  test("invalid tool configuration is reported per-tool and loop continues", async () => {
+    const { deps, err, out, shellCalls, tagCalls } = captureUpdater({
+      commandExists: () => true,
+      shell: { "opencode --version": { output: "1.2.3\n", exitCode: 0 } },
+      tags: { "anomalyco/opencode": "1.2.3" },
+    });
+    const mixedTools = [
       {
         bin: "",
         repo: "anomalyco/opencode",
@@ -177,12 +212,46 @@ describe("runUpdater", () => {
         updateCmd: "opencode upgrade",
       },
       { bin: "droast", repo: "not-a-repo", versionCmd: "droast --version", updateCmd: "true" },
+      {
+        bin: "opencode",
+        repo: "anomalyco/opencode",
+        versionCmd: "opencode --version",
+        updateCmd: "opencode upgrade",
+      },
     ];
 
-    await expect(runUpdater(badTools, deps)).rejects.toThrow();
+    const exitCode = await runUpdater(mixedTools, deps);
 
-    expect(shellCalls).toEqual([]);
-    expect(tagCalls).toEqual([]);
+    expect(exitCode).toBe(1);
+    const text = err.join("");
+    expect(text).toContain("Invalid config");
+    expect(text).toContain("not-a-repo");
+    expect(text).toContain("Update completed with errors");
+    expect(shellCalls).toEqual(["opencode --version"]);
+    expect(tagCalls).toEqual(["anomalyco/opencode"]);
+    expect(out.join("")).toContain("opencode: installed=1.2.3 latest=1.2.3");
+  });
+
+  test("release lookup returning 404 is reported as 'no GitHub release found'", async () => {
+    const { deps, err, tagCalls } = captureUpdater({
+      commandExists: () => true,
+      shell: { "opencode --version": { output: "1.0.0\n", exitCode: 0 } },
+      tagThrows: { "anomalyco/opencode": 404 },
+    });
+    const oneTool = [
+      {
+        bin: "opencode",
+        repo: "anomalyco/opencode",
+        versionCmd: "opencode --version",
+        updateCmd: "opencode upgrade",
+      },
+    ];
+
+    const exitCode = await runUpdater(oneTool, deps);
+
+    expect(exitCode).toBe(1);
+    expect(err.join("")).toContain("No GitHub release found for anomalyco/opencode");
+    expect(tagCalls).toEqual(["anomalyco/opencode"]);
   });
 });
 

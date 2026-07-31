@@ -10,7 +10,6 @@ const ToolSchema = v.object({
   versionCmd: v.pipe(v.string(), v.minLength(1)),
   updateCmd: v.pipe(v.string(), v.minLength(1)),
 });
-const ToolsSchema = v.array(ToolSchema);
 
 export type Tool = v.InferOutput<typeof ToolSchema>;
 
@@ -44,16 +43,39 @@ export const tools: Tool[] = [
     versionCmd: "opencode --version",
     updateCmd: "opencode upgrade",
   },
-  { bin: "omp", repo: "can1357/oh-my-pi", versionCmd: "omp --version", updateCmd: "omp update" },
+  {
+    bin: "omp",
+    repo: "can1357/oh-my-pi",
+    versionCmd: "omp --version",
+    updateCmd: "omp update"
+  },
   {
     bin: "droast",
     repo: "immanuwell/dockerfile-roast",
     versionCmd: "droast --version",
     updateCmd: "curl -fsL https://ewry.net/droast/install.sh | sh",
   },
+  {
+    bin: "vp",
+    repo: "voidzero-dev/vite-plus",
+    versionCmd: "vp --version",
+    updateCmd: "vp upgrade",
+  },
 ];
 
 async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
+  const parsed = v.safeParse(ToolSchema, tool);
+  if (!parsed.success) {
+    const reason = parsed.issues.map((i) => i.message).join("; ");
+    const binLabel =
+      typeof (tool as { bin?: unknown }).bin === "string"
+        ? (tool as { bin: string }).bin
+        : "<unknown>";
+    deps.err(`${picocolors.red(`Invalid config for ${binLabel}: ${reason}`)}\n`);
+    return false;
+  }
+  tool = parsed.output;
+
   if (!deps.commandExists(tool.bin)) {
     deps.out(`${picocolors.yellow(`${tool.bin} is not installed`)}\n`);
     return true;
@@ -70,8 +92,15 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   let latest: string;
   try {
     latest = (await deps.getLatestTag(tool.repo)).replace(/^v/, "");
-  } catch {
-    deps.err(`${picocolors.red(`Failed to get latest version for ${tool.repo}`)}\n`);
+  } catch (e) {
+    const status = (e as { status?: number } | null)?.status;
+    deps.err(
+      `${picocolors.red(
+        status === 404
+          ? `No GitHub release found for ${tool.repo}`
+          : `Failed to get latest version for ${tool.repo}`,
+      )}\n`,
+    );
     return false;
   }
   if (!/^\d+\.\d+\.\d+$/.test(latest)) {
@@ -96,10 +125,9 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
 
 export async function runUpdater(toolList: Tool[], deps: UpdaterDeps): Promise<number> {
   process.env["TIRITH"] = "0";
-  const parsedTools = v.parse(ToolsSchema, toolList);
   let status = 0;
 
-  for (const tool of parsedTools) {
+  for (const tool of toolList) {
     if (!(await processTool(tool, deps))) status = 1;
     deps.out("\n");
   }
