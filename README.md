@@ -1,6 +1,4 @@
-<p align="center">
-  <img alt="header" src="https://shieldcn.dev/header/graph.svg?title=Delta&amp;subtitle=Personal+Tool+Updater&amp;logo=ri%3ATbDelta&amp;mode=dark&amp;watermark=true" />
-</p>
+# Delta
 
 [![CI](https://shieldcn.dev/github/wsouto/delta/ci.svg?size=xs&split=true)](https://github.com/wsouto/delta/actions)
 [![last commit](https://shieldcn.dev/github/wsouto/delta/last-commit.svg?variant=ghost&size=xs)](https://github.com/wsouto/delta/commits)
