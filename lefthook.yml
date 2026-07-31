@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: true # Run typecheck, lint, and tests concurrently to save time
+  commands:
+    typecheck:
+      run: bun run typecheck
+    lint:
+      run: bun run lint
+    tests:
+      # Filters only staged .ts files for faster validation
+      glob: "*.ts"
+      run: bun test {staged_files}
+
+commit-msg:
+  commands:
+    commitlint:
+      # Validates commit message against your config
+      run: bun x commitlint --edit {1}
