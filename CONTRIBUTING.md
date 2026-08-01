@@ -1,6 +1,6 @@
 # Contributing
 
-## Feature workflow
+## Feature Workflow
 
 1. Open an issue describing user outcome, motivation, and 1–5 observable acceptance
    criteria.
