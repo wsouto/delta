@@ -1,10 +1,10 @@
-# AGENTS.md
+# Project Guidelines
 
 CLI utility that keeps a curated list of CLI tools up to date by comparing the locally installed
 version against the latest GitHub release. `index.ts` is the implementation; run it with
 `bun run index.ts`.
 
-## What it does
+## What It Does
 
 For each entry in the `tools` array in `index.ts`:
 
@@ -13,7 +13,7 @@ For each entry in the `tools` array in `index.ts`:
 3. Fetches the latest GitHub release tag via `@octokit/rest`'s `repos.getLatestRelease` (no `gh` required).
 4. Runs its configured update command when the versions differ.
 
-## Repo layout
+## Repo Layout
 
 - `index.ts` — implementation and declarative tool list.
 - `index.test.ts` — `bun:test` behavior tests; injects fakes at the system boundaries.
@@ -21,7 +21,7 @@ For each entry in the `tools` array in `index.ts`:
 - `CHANGELOG.md` — release notes (Keep a Changelog 1.1.0); the committed file is
   curated by hand. `bun run changelog` regenerates a raw starting point from `git log`.
 
-## Hard-won context
+## Hard-Won Context
 
 - **`TIRITH=0` is load-bearing.** Set at `runUpdater` entry so the local update gate doesn't
   prompt during updates. Preserve it unless the gate's policy changes.
@@ -39,7 +39,7 @@ For each entry in the `tools` array in `index.ts`:
   `v.parse(v.array(ToolSchema), tools)` at the top of `runUpdater` fail-fasts on bad config —
   source literals are programmer errors, not runtime input.
 
-## Adding a tool
+## Adding a Tool
 
 Append one object to the `tools` array. Every field is required:
 
@@ -82,18 +82,18 @@ and Semantic Versioning; the version in `package.json` is the source of truth.
 
 ---
 
-## Bun stack
+## Bun Stack
 
 ### Toolchain
 
 - Runtime: Bun 1.3.14. `index.ts` is the ESM module entry; the `#!/usr/bin/env bun` shebang is load-bearing.
-- CLI surface: `commander` (parsing), `picocolors` (colors), `valibot` (tools config schema
+- CLI surface: `commander` (parsing), `picocolors` (colors), `valibot` (tools configuration schema
   - `v.InferOutput` types), `@octokit/rest` (`rest.repos.getLatestRelease`).
 - Tests: `bun:test`, in-process.
 - Lint / Format: `oxlint` + `oxfmt` (paired).
-- Typecheck: `tsc --noEmit`. TypeScript is in `devDependencies` at `^7`. Never
+- Type check: `tsc --noEmit`. TypeScript is in `devDependencies` at `^7`. Never
   - `peerDependencies` for a `"private": true` package.
-- Hooks: `@evilmartians/lefthook` (pre-commit gates typecheck + lint + tests in parallel)
+- Hooks: `@evilmartians/lefthook` (pre-commit gates type check + lint + tests in parallel)
   - `@commitlint` with `@commitlint/config-conventional`.
 
 ### Scripts
@@ -105,7 +105,7 @@ and Semantic Versioning; the version in `package.json` is the source of truth.
 | `bun run format` / `format:check` | `oxfmt` / `oxfmt --check`                         |
 | `bun run typecheck`               | `tsc --noEmit`                                    |
 | `bun run check`                   | typecheck + lint + test — the pre-commit gate     |
-| `bun run build`                   | `bun build --compile --outfile delta` gitignored) |
+| `bun run build`                   | `bun build --compile --outfile delta` gitignored  |
 | `bun run start`                   | `bun run index.ts`                                |
 
 ### Discipline
@@ -115,6 +115,8 @@ and Semantic Versioning; the version in `package.json` is the source of truth.
 - **Always lint project Markdown files with `markdownlint`.** Run it on every `*.md` outside
   `.agents/` (`README.md`, `AGENTS.md`, etc.) before committing. Managed skill Markdown under
   `.agents/` is excluded. Fix the violations, don't suppress them.
+- **Always lint project TOML files with `taplo`.** Run it on every `*.toml` (`lefthook.yml`, etc.)
+  before committing. Fix the violations, don't suppress them.
 - **`delta` is gitignored.** `bun build --compile` writes the binary to repo root; do not
   remove the `.gitignore` entry.
 - **Tests are in-process.** Updater tests inject fakes at the system boundaries
