@@ -310,6 +310,18 @@ Tests should cover at least:
 Use temporary directories, fixtures, dependency injection, environment isolation,
 or equivalent techniques so tests do not read or modify the developer’s actual configuration.
 
+### Configuration Validation
+
+Validation occurs in two stages.
+
+1. TOML validation
+   * Performed by the TOML parser.
+   * Ensures the file is valid TOML.
+
+2. Schema validation
+   * Performed by Delta.
+   * Ensures the parsed TOML matches Delta's configuration schema.
+
 ### Final Validation
 
 Before marking this feature complete:
