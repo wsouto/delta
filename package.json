@@ -17,6 +17,7 @@
     "changelog": "auto-changelog --template keepachangelog --output CHANGELOG.md --unreleased --tag-prefix v --commit-limit false --ignore-commit-pattern \"^chore|^docs|^ci|^test\" --hide-empty-releases --hide-credit"
   },
   "dependencies": {
+    "@clack/prompts": "^1.7.0",
     "@octokit/rest": "^22.0.1",
     "commander": "^15.0.0",
     "picocolors": "^1.1.1",

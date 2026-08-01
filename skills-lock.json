@@ -12,16 +12,17 @@
       "skillPath": "skills/changelog/SKILL.md",
       "computedHash": "17239a739138d30f0e11e879869a411ca341e633809bb4170d49b07e1e27d4d0"
     },
+    "clack-prompts": {
+      "source": "nklisch/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/clack-prompts/SKILL.md",
+      "computedHash": "cfb38975ff38f6bf3405cf2bcafaf36530b32ce7ddc8e1167817a6604e51c2d3"
+    },
     "github-actions-efficiency": {
       "source": "github/awesome-copilot",
       "sourceType": "github",
       "skillPath": "skills/github-actions-efficiency/SKILL.md",
       "computedHash": "92628da7f3eb2ae5625168f31587712a3cd77ac9ba5a23ffc24e86fd12c4408c"
-    },
-    "smithery-ai-cli": {
-      "source": "smithery.ai",
-      "sourceType": "well-known",
-      "computedHash": "dc17f090c975afe1d96a25dbe843fc9c978e96d5699eed1bb7c12b411e10b830"
     },
     "tdd": {
       "source": "mattpocock/skills",
