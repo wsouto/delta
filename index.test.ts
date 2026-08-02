@@ -1,5 +1,12 @@
 import { test, expect, describe } from "bun:test";
-import { buildProgram, runUpdater, runShell, tools } from "./index.ts";
+import {
+  buildProgram,
+  loadTools,
+  parseTools,
+  resolveConfigPath,
+  runUpdater,
+  runShell,
+} from "./index.ts";
 
 type UpdateDeps = {
   commandExists?: (bin: string) => boolean;
@@ -10,6 +17,31 @@ type UpdateDeps = {
 
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, "g");
 const stripAnsi = (s: string) => s.replace(ANSI, "");
+
+const tools = parseTools(
+  `
+[tools.opencode]
+repository = "https://github.com/anomalyco/opencode"
+version_command = "opencode --version"
+update_command = "opencode upgrade"
+
+[tools.omp]
+repository = "https://github.com/can1357/oh-my-pi"
+version_command = "omp --version"
+update_command = "omp update"
+
+[tools.droast]
+repository = "https://github.com/immanuwell/dockerfile-roast"
+version_command = "droast --version"
+update_command = "curl -fsL https://ewry.net/droast/install.sh | sh"
+
+[tools.vp]
+repository = "https://github.com/voidzero-dev/vite-plus"
+version_command = "vp --version"
+update_command = "vp upgrade"
+`,
+  "/tmp/delta.toml",
+);
 
 function captureUpdater(overrides: UpdateDeps = {}) {
   const out: string[] = [];
@@ -44,6 +76,232 @@ function captureUpdater(overrides: UpdateDeps = {}) {
   return { deps, out, err, tagCalls, shellCalls };
 }
 
+describe("configuration format", () => {
+  test("parses a named TOML tool into updater configuration", () => {
+    const tools = parseTools(
+      `
+[tools.example]
+repository = "https://github.com/owner/repository"
+version_command = "example --version"
+update_command = "example update"
+`,
+      "/tmp/delta.toml",
+    );
+
+    expect(tools).toEqual([
+      {
+        bin: "example",
+        repo: "owner/repository",
+        versionCmd: "example --version",
+        updateCmd: "example update",
+      },
+    ]);
+  });
+});
+
+describe("configuration path", () => {
+  test("uses configured XDG config home", () => {
+    expect(resolveConfigPath({ xdgConfigHome: "/tmp/config", homeDir: "/home/test" })).toBe(
+      "/tmp/config/delta/delta.toml",
+    );
+  });
+
+  test.each([undefined, ""])("falls back when XDG config home is %p", (xdgConfigHome) => {
+    expect(resolveConfigPath({ xdgConfigHome, homeDir: "/home/test" })).toBe(
+      "/home/test/.config/delta/delta.toml",
+    );
+  });
+});
+
+describe("configuration loading", () => {
+  test("loads tools from TOML without touching user configuration", async () => {
+    const result = await loadTools(
+      "/tmp/delta/delta.toml",
+      async () => `
+[tools.example]
+repository = "https://github.com/owner/repository"
+version_command = "example --version"
+update_command = "example update"
+`,
+    );
+
+    expect(result).toEqual({
+      status: "loaded",
+      tools: [
+        {
+          bin: "example",
+          repo: "owner/repository",
+          versionCmd: "example --version",
+          updateCmd: "example update",
+        },
+      ],
+    });
+  });
+});
+
+test("feeds loaded TOML tools into the CLI updater", async () => {
+  const { deps, out } = captureUpdater();
+
+  await buildProgram({
+    configPath: "/tmp/delta/delta.toml",
+    readFile: async () => `
+[tools.example]
+repository = "https://github.com/owner/repository"
+version_command = "example --version"
+update_command = "example update"
+`,
+    updaterDeps: deps,
+  }).parseAsync(["node", "delta"]);
+
+  expect(out.join("")).toBe("example is not installed\n\nUpdate complete\n");
+});
+
+describe("first run", () => {
+  test("guides setup when configuration file is missing", async () => {
+    const { deps, out, err } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/config/delta/delta.toml",
+        readFile: async () => {
+          throw Object.assign(new Error("not found"), { code: "ENOENT" });
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta"]);
+
+      const message = out.join("");
+      expect(message).toContain("No tools have been configured yet.");
+      expect(message).toContain("/tmp/config/delta/delta.toml");
+      expect(message).toContain("[tools.example]");
+      expect(message).toContain('repository = "https://github.com/owner/repository"');
+      expect(message).toContain("After saving the file, run Delta again.");
+      expect(err.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("reports invalid configuration as an error, not first-run setup", async () => {
+    const { deps, out, err } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/config/delta/delta.toml",
+        readFile: async () => "tools = =",
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta"]);
+
+      expect(err.join("")).toContain("[error] /tmp/config/delta/delta.toml: invalid TOML:");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+});
+
+describe("configuration errors", () => {
+  test("loads multiple named tools", () => {
+    expect(
+      parseTools(
+        `
+[tools.alpha]
+repository = "https://github.com/owner/alpha"
+version_command = "alpha --version"
+update_command = "alpha update"
+
+[tools.beta]
+repository = "https://github.com/owner/beta"
+version_command = "beta --version"
+update_command = "beta update"
+`,
+        "/tmp/delta.toml",
+      ),
+    ).toHaveLength(2);
+  });
+
+  test("reports invalid TOML with its path", () => {
+    expect(() => parseTools("tools = =", "/tmp/delta.toml")).toThrow(
+      "/tmp/delta.toml: invalid TOML:",
+    );
+  });
+
+  test("reports invalid top-level configuration", () => {
+    expect(() => parseTools('tools = "invalid"', "/tmp/delta.toml")).toThrow(
+      "/tmp/delta.toml: invalid configuration:",
+    );
+  });
+
+  test("reports missing required fields", () => {
+    expect(() =>
+      parseTools(
+        `
+[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+`,
+        "/tmp/delta.toml",
+      ),
+    ).toThrow("update_command");
+  });
+
+  test("rejects non-GitHub repository URLs", () => {
+    expect(() =>
+      parseTools(
+        `
+[tools.example]
+repository = "https://example.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`,
+        "/tmp/delta.toml",
+      ),
+    ).toThrow('tool "example" repository must be a GitHub repository URL');
+  });
+
+  test("keeps a missing file distinct from an unreadable file", async () => {
+    const missing = await loadTools("/tmp/delta.toml", async () => {
+      throw Object.assign(new Error("not found"), { code: "ENOENT" });
+    });
+    expect(missing).toEqual({ status: "missing" });
+
+    await expect(
+      loadTools("/tmp/delta.toml", async () => {
+        throw new Error("permission denied");
+      }),
+    ).rejects.toThrow("/tmp/delta.toml: unable to read configuration: permission denied");
+  });
+
+  test("rejects unknown configuration fields", () => {
+    expect(() =>
+      parseTools(
+        `
+[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+extra = true
+`,
+        "/tmp/delta.toml",
+      ),
+    ).toThrow("invalid configuration");
+  });
+
+  test("rejects repository URLs without a repository name", () => {
+    expect(() =>
+      parseTools(
+        `
+[tools.example]
+repository = "https://github.com/owner/.git"
+version_command = "example --version"
+update_command = "example update"
+`,
+        "/tmp/delta.toml",
+      ),
+    ).toThrow('tool "example" repository must be a GitHub repository URL');
+  });
+});
 describe("runUpdater", () => {
   test("missing tools are successful skips and GitHub is not queried", async () => {
     const { deps, out, tagCalls } = captureUpdater();
@@ -292,6 +550,47 @@ describe("delta CLI", () => {
     expect(error).toBeDefined();
     expect(stdout).toContain("GitHub releases");
     expect(stdout).toContain("Usage:");
+    expect(stdout).toContain("-c, --config <path>");
+    expect(stdout).toContain("--print-config-path");
+  });
+
+  test("--config overrides default configuration path", async () => {
+    const { deps, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/ignored/delta.toml",
+        readFile: async (path) => {
+          expect(path).toBe("/tmp/custom-delta.toml");
+          return `
+[tools.example]
+repository = "https://github.com/owner/repository"
+version_command = "example --version"
+update_command = "example update"
+`;
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml"]);
+
+      expect(out.join("")).toBe("example is not installed\n\nUpdate complete\n");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("--print-config-path exits before loading configuration", async () => {
+    const { deps, out } = captureUpdater();
+
+    await buildProgram({
+      configPath: "/tmp/delta/delta.toml",
+      readFile: async () => {
+        throw new Error("must not read");
+      },
+      updaterDeps: deps,
+    }).parseAsync(["node", "delta", "--print-config-path"]);
+
+    expect(out.join("")).toBe("/tmp/delta/delta.toml\n");
   });
 
   test("-h is recognized as help", () => {
@@ -303,7 +602,7 @@ describe("delta CLI", () => {
   test("--version prints the package version", () => {
     const { stdout, error } = captureRun(["--version"]);
     expect(error).toBeDefined();
-    expect(stdout.trim()).toBe("0.0.1");
+    expect(stdout.trim()).toBe("0.1.0");
   });
 
   test("unknown option produces an error", () => {

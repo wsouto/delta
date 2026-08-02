@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Command } from "commander";
 import { Octokit } from "@octokit/rest";
 import picocolors from "picocolors";
@@ -12,6 +14,99 @@ const ToolSchema = v.object({
 });
 
 export type Tool = v.InferOutput<typeof ToolSchema>;
+
+const ToolConfigSchema = v.strictObject({
+  repository: v.pipe(v.string(), v.minLength(1)),
+  version_command: v.pipe(v.string(), v.minLength(1)),
+  update_command: v.pipe(v.string(), v.minLength(1)),
+});
+
+const ConfigSchema = v.strictObject({
+  tools: v.record(v.pipe(v.string(), v.minLength(1)), ToolConfigSchema),
+});
+
+export class ConfigError extends Error {
+  constructor(
+    readonly path: string,
+    message: string,
+  ) {
+    super(`${path}: ${message}`);
+  }
+}
+
+function githubRepo(repository: string, path: string, bin: string): string {
+  let url: URL;
+  try {
+    url = new URL(repository);
+  } catch {
+    throw new ConfigError(path, `tool "${bin}" repository must be a GitHub repository URL`);
+  }
+
+  const parts = url.pathname.split("/").filter(Boolean);
+  const [owner, repo] = parts;
+  const repoName = repo?.replace(/\.git$/, "");
+  if (
+    url.protocol !== "https:" ||
+    url.hostname !== "github.com" ||
+    !owner ||
+    !repoName ||
+    parts.length !== 2
+  ) {
+    throw new ConfigError(path, `tool "${bin}" repository must be a GitHub repository URL`);
+  }
+  return `${owner}/${repoName}`;
+}
+
+export function parseTools(source: string, path: string): Tool[] {
+  let config: unknown;
+  try {
+    config = Bun.TOML.parse(source);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "invalid TOML";
+    throw new ConfigError(path, `invalid TOML: ${message}`);
+  }
+
+  const parsed = v.safeParse(ConfigSchema, config);
+  if (!parsed.success) {
+    const issues = parsed.issues.map((issue) => issue.message).join("; ");
+    throw new ConfigError(path, `invalid configuration: ${issues}`);
+  }
+  const entries = Object.entries(parsed.output.tools);
+  if (entries.length === 0) {
+    throw new ConfigError(path, 'invalid configuration: define at least one tool under "[tools]"');
+  }
+
+  return entries.map(([bin, tool]) => ({
+    bin,
+    repo: githubRepo(tool.repository, path, bin),
+    versionCmd: tool.version_command,
+    updateCmd: tool.update_command,
+  }));
+}
+
+export function resolveConfigPath({
+  xdgConfigHome,
+  homeDir,
+}: {
+  xdgConfigHome?: string;
+  homeDir: string;
+}): string {
+  return join(xdgConfigHome || join(homeDir, ".config"), "delta", "delta.toml");
+}
+
+export async function loadTools(
+  path: string,
+  readFile: (configPath: string) => Promise<string> = (configPath) => Bun.file(configPath).text(),
+): Promise<{ status: "loaded"; tools: Tool[] } | { status: "missing" }> {
+  try {
+    return { status: "loaded", tools: parseTools(await readFile(path), path) };
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code === "ENOENT") return { status: "missing" };
+    if (error instanceof ConfigError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ConfigError(path, `unable to read configuration: ${message}`);
+  }
+}
 
 export type RunShell = (cmd: string) => Promise<{ output: string; exitCode: number }>;
 
@@ -36,33 +131,6 @@ export const runShell: RunShell = async (cmd) => {
   return { output: output + errOutput, exitCode };
 };
 
-export const tools: Tool[] = [
-  {
-    bin: "opencode",
-    repo: "anomalyco/opencode",
-    versionCmd: "opencode --version",
-    updateCmd: "opencode upgrade",
-  },
-  {
-    bin: "omp",
-    repo: "can1357/oh-my-pi",
-    versionCmd: "omp --version",
-    updateCmd: "omp update"
-  },
-  {
-    bin: "droast",
-    repo: "immanuwell/dockerfile-roast",
-    versionCmd: "droast --version",
-    updateCmd: "curl -fsL https://ewry.net/droast/install.sh | sh",
-  },
-  {
-    bin: "vp",
-    repo: "voidzero-dev/vite-plus",
-    versionCmd: "vp --version",
-    updateCmd: "vp upgrade",
-  },
-];
-
 async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   const parsed = v.safeParse(ToolSchema, tool);
   if (!parsed.success) {
@@ -71,7 +139,9 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
       typeof (tool as { bin?: unknown }).bin === "string"
         ? (tool as { bin: string }).bin
         : "<unknown>";
-    deps.err(`${picocolors.bold(picocolors.red("[error]"))} Invalid config for ${binLabel}: ${reason}\n`);
+    deps.err(
+      `${picocolors.bold(picocolors.red("[error]"))} Invalid config for ${binLabel}: ${reason}\n`,
+    );
     return false;
   }
   tool = parsed.output;
@@ -85,7 +155,9 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   const current =
     versionResult.exitCode === 0 ? versionResult.output.match(/\d+\.\d+\.\d+/)?.[0] : undefined;
   if (!current) {
-    deps.err(`${picocolors.bold(picocolors.red("[error]"))} Failed to get installed version for ${tool.repo}\n`);
+    deps.err(
+      `${picocolors.bold(picocolors.red("[error]"))} Failed to get installed version for ${tool.repo}\n`,
+    );
     return false;
   }
 
@@ -104,7 +176,9 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     return false;
   }
   if (!/^\d+\.\d+\.\d+$/.test(latest)) {
-    deps.err(`${picocolors.bold(picocolors.red("[error]"))} Failed to get latest version for ${tool.repo}\n`);
+    deps.err(
+      `${picocolors.bold(picocolors.red("[error]"))} Failed to get latest version for ${tool.repo}\n`,
+    );
     return false;
   }
 
@@ -114,7 +188,9 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     return true;
   }
 
-  deps.out(`${picocolors.bold(picocolors.green("[updated]"))} ${tool.bin} from ${current} to ${latest}\n`);
+  deps.out(
+    `${picocolors.bold(picocolors.green("[updated]"))} ${tool.bin} from ${current} to ${latest}\n`,
+  );
   const updateResult = await deps.runShell(tool.updateCmd);
   if (updateResult.exitCode !== 0) {
     deps.err(`${picocolors.bold(picocolors.red("[error]"))} Failed to update ${tool.repo}\n`);
@@ -140,29 +216,85 @@ export async function runUpdater(toolList: Tool[], deps: UpdaterDeps): Promise<n
   return status;
 }
 
-export function buildProgram(): Command {
+export function firstRunMessage(path: string): string {
+  return `No tools have been configured yet.
+
+Create the configuration file at:
+
+  ${path}
+
+Then add at least one tool:
+
+  [tools.example]
+  repository = "https://github.com/owner/repository"
+  version_command = "example --version"
+  update_command = "example update"
+
+After saving the file, run Delta again.
+`;
+}
+
+export type CliDeps = {
+  configPath?: string;
+  readFile?: (configPath: string) => Promise<string>;
+  updaterDeps?: UpdaterDeps;
+};
+
+export function buildProgram(deps: CliDeps = {}): Command {
   return new Command()
     .name("delta")
     .description("Keep curated CLI tools up to date against their latest GitHub releases")
-    .version("0.0.1")
-    .action(async () => {
-      const octokit = new Octokit({ auth: process.env["GITHUB_TOKEN"] });
-      const exitCode = await runUpdater(tools, {
-        commandExists: (bin) => Bun.which(bin) !== null,
-        runShell,
-        getLatestTag: async (repo) => {
-          const [owner, name] = repo.split("/") as [string, string];
-          const { data } = await octokit.rest.repos.getLatestRelease({ owner, repo: name });
-          return data.tag_name;
-        },
-        out: (s) => {
-          process.stdout.write(s);
-        },
-        err: (s) => {
-          process.stderr.write(s);
-        },
-      });
-      process.exitCode = exitCode;
+    .version("0.1.0")
+    .option("-c, --config <path>", "read tool configuration from this path")
+    .option("--print-config-path", "print resolved configuration path and exit")
+    .action(async (options: { config?: string; printConfigPath?: boolean }) => {
+      const configPath =
+        options.config ??
+        deps.configPath ??
+        resolveConfigPath({
+          xdgConfigHome: process.env["XDG_CONFIG_HOME"],
+          homeDir: homedir(),
+        });
+      if (options.printConfigPath) {
+        if (deps.updaterDeps) deps.updaterDeps.out(`${configPath}\n`);
+        else process.stdout.write(`${configPath}\n`);
+        return;
+      }
+
+      const updaterDeps =
+        deps.updaterDeps ??
+        (() => {
+          const octokit = new Octokit({ auth: process.env["GITHUB_TOKEN"] });
+          return {
+            commandExists: (bin: string) => Bun.which(bin) !== null,
+            runShell,
+            getLatestTag: async (repo: string) => {
+              const [owner, name] = repo.split("/") as [string, string];
+              const { data } = await octokit.rest.repos.getLatestRelease({ owner, repo: name });
+              return data.tag_name;
+            },
+            out: (s: string) => {
+              process.stdout.write(s);
+            },
+            err: (s: string) => {
+              process.stderr.write(s);
+            },
+          };
+        })();
+
+      try {
+        const config = await loadTools(configPath, deps.readFile);
+        if (config.status === "missing") {
+          updaterDeps.out(firstRunMessage(configPath));
+          process.exitCode = 1;
+          return;
+        }
+        process.exitCode = await runUpdater(config.tools, updaterDeps);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        updaterDeps.err(`${picocolors.bold(picocolors.red("[error]"))} ${message}\n`);
+        process.exitCode = 1;
+      }
     });
 }
 

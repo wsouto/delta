@@ -1,0 +1,4 @@
+[tools.delta]
+repository = "https://github.com/wsouto/delta"
+version_command = "delta --version"
+update_command = "bun run build"

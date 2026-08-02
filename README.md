@@ -24,14 +24,44 @@ bun run index.ts
 
 The tool:
 
-1. Skips tracked tools whose binaries are not on `PATH`.
+1. Skips configured tools whose binaries are not on `PATH`.
 2. Runs each configured version command and extracts the first `X.Y.Z` match.
-3. Looks up the latest tag via the GitHub API - no `gh` CLI required.
+3. Looks up the latest tag via the GitHub API — no `gh` CLI required.
 4. Prints `installed=<v> latest=<v>` for each installed tool.
-5. Runs the configured update command when the versions differ.
+5. Runs the configured update command when versions differ.
 
-Tool configuration lives in the `tools` array in `index.ts`. Add, remove, or reorder one
-`{ bin, repo, versionCmd, updateCmd }` object per tool. All four fields are required.
+## Configuration
+
+Delta reads `$XDG_CONFIG_HOME/delta/delta.toml`; when `XDG_CONFIG_HOME` is unset
+or empty, it reads `~/.config/delta/delta.toml`. Create this file before first run.
+Use `--config <path>` to select another file, or `--print-config-path` to show the
+resolved default path and exit.
+
+Each uniquely named tool is a `[tools.<name>]` table. Its name is the binary checked
+on `PATH`; `repository` must be an HTTPS GitHub repository URL.
+
+```toml
+[tools.opencode]
+repository = "https://github.com/anomalyco/opencode"
+version_command = "opencode --version"
+update_command = "opencode upgrade"
+
+[tools.omp]
+repository = "https://github.com/can1357/oh-my-pi"
+version_command = "omp --version"
+update_command = "omp update"
+
+[tools.droast]
+repository = "https://github.com/immanuwell/dockerfile-roast"
+version_command = "droast --version"
+# WARNING: update_command is executed in a shell; only use commands you trust.
+update_command = "curl -fsL https://ewry.net/droast/install.sh | sh"
+
+[tools.vp]
+repository = "https://github.com/voidzero-dev/vite-plus"
+version_command = "vp --version"
+update_command = "vp upgrade"
+```
 
 ## Prerequisites
 
@@ -73,4 +103,4 @@ bun run build   # produces ./delta (gitignored)
 
 - [ ] Add, remove, and edit tools
 
-*Obs.: This script has little to no utility, but I did it anyway.*
+_Obs.: This script has little to no utility, but I did it anyway._
