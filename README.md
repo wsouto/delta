@@ -101,6 +101,6 @@ bun run build   # produces ./delta (gitignored)
 
 ## TODO
 
-- [ ] Add, remove, and edit tools
+- [ ] Add, edit, and delete tools
 
 _Obs.: This script has little to no utility, but I did it anyway._
