@@ -309,6 +309,8 @@ Before publishing Feature 1:
 
 ## [x] Step 8: Verify, Version, and Commit Feature 1
 
+Determine the appropriate semantic version bump for this feature.
+
 Run repository checks required by `AGENTS.md`, `CONTRIBUTING.md`, and CI.
 Determine the appropriate semantic version bump for Feature 1, update the
 version source of truth and synchronized CLI metadata, and update release notes.
@@ -642,6 +644,145 @@ Implement:
 - Deleting a missing tool produces a clear error.
 - No other tool data is modified.
 - Relevant automated tests pass.
+
+---
+
+## [ ] Step 4: Add Tool Administration CLI Options
+
+Expose the administration operations through CLI help:
+
+```text
+-a, --add <tool>
+-e, --edit <tool>
+-d, --delete <tool>
+```
+
+### Behavior
+
+- Wire the three flags into the existing commander program using the project’s current argument-parsing conventions.
+- Each flag takes the tool’s unique name or identifier as its `<tool>` argument.
+- Document all three options in `--help`.
+- A missing `<tool>` argument produces a clear usage or validation error.
+- Reject conflicting administration operations in the same invocation unless the existing CLI architecture explicitly supports it.
+
+### Acceptance Criteria
+
+- `delta --help` documents all three options.
+- The options follow the project’s existing CLI conventions.
+- Missing `<tool>` arguments are handled with a clear error.
+- Existing non-administration commands and options remain unchanged.
+
+---
+
+## [ ] Step 5: Preserve Existing CLI Behavior
+
+Verify the default updater flow is unaffected by the new administration commands.
+
+### Behavior
+
+- Running `delta` without an administration flag keeps the existing update behavior.
+- `-c, --config <path>` and `--print-config-path` behave exactly as they did before.
+- Administration flags do not interfere with the default run path.
+
+### Acceptance Criteria
+
+- Default updater behavior is preserved.
+- Existing configuration options are preserved.
+- No unrelated CLI behavior changes are introduced.
+
+---
+
+## [ ] Step 6: Persist Changes to the Resolved Configuration Path
+
+Administration operations write to the configuration file resolved by the existing configuration loader.
+
+### Behavior
+
+- Add, edit, and delete operations persist through the project’s existing storage mechanism.
+- The file written is the resolved configuration path, honoring `--config <path>` when provided.
+- The XDG fallback resolution is used when `--config` is not provided.
+- `--print-config-path` reports the file that administration operations would modify.
+- Do not create the configuration file implicitly unless required by the operation.
+
+### Acceptance Criteria
+
+- Changes persist to the resolved configuration path.
+- `--config <path>` redirects writes to the given file.
+- The XDG-resolved fallback is used without `--config`.
+- Persistence reuses the existing data-access utilities.
+- Relevant automated tests pass.
+
+---
+
+## [ ] Step 7: Prepare Feature Branch and Issue
+
+Before publishing Feature 2:
+
+- Open a GitHub issue describing the user outcome, motivation, and observable acceptance criteria.
+- Start a feature branch from the latest `origin/main` using the issue number in its name.
+- Keep the working tree isolated from `main`.
+
+### Acceptance Criteria
+
+- The issue exists and is linked to Feature 2.
+- The branch is based on current `origin/main`.
+- No unrelated changes are included.
+
+## [ ] Step 8: Verify, Version, and Commit Feature 2
+
+Determine the appropriate semantic version bump for this feature.
+
+Run repository checks required by `AGENTS.md`, `CONTRIBUTING.md`, and CI.
+Determine the appropriate semantic version bump for Feature 2, update the
+version source of truth and synchronized CLI metadata, and update release notes.
+Review the complete diff, then create atomic Conventional Commit(s).
+
+### Versioning
+
+- `package.json` is the version source of truth.
+- Keep `index.ts` CLI version synchronized with `package.json`.
+- Record the user-visible release change in `CHANGELOG.md`.
+
+### Acceptance Criteria
+
+- The version bump matches the user-visible scope.
+- `package.json` and `index.ts` report the same version.
+- `CHANGELOG.md` contains the corresponding release note.
+- Tests, lint, formatting, type checking, build, hooks, and CI-equivalent checks pass.
+- The commit contains only Feature 2 changes.
+- Commit message follows Conventional Commits.
+
+---
+
+## [ ] Step 9: Push and Open Draft Pull Request
+
+Push the feature branch and open a draft pull request targeting `main`.
+Include:
+
+- Summary;
+- acceptance criteria and implementation status;
+- verification commands and results;
+- `Closes #<issue-number>`.
+
+### Acceptance Criteria
+
+- The remote branch is available.
+- Draft pull request targets `main`.
+- Pull request describes all Feature 2 changes and validation evidence.
+- Issue and pull request are linked.
+
+---
+
+## [ ] Step 10: Handoff for Review and Merge
+
+Stop implementation work after the draft pull request is ready.
+The maintainer reviews, accepts, marks the pull request ready, and merges it.
+
+### Acceptance Criteria
+
+- Review handoff is explicit.
+- No merge, approval, or release tag is performed by the implementation agent.
+- Post-merge cleanup is performed only after maintainer merge.
 
 ---
 
