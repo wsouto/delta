@@ -30,3 +30,9 @@ schema: spec-driven
 #     archive:
 #       guidance:
 #         - Summarize the archive outcome before finishing
+
+context: |
+  Tech stack: TypeScript
+  We use conventional commits
+  We follow the CONTRIBUTING.md guidelines
+  Domain: CLI tool
