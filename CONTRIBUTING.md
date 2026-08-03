@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to Delta.
+_**Note:** This guide was written by an agent to agents._
 
 ## Development Setup
 
