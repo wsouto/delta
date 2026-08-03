@@ -61,24 +61,10 @@ The test suite is in-process; never call `bun run index.ts` from a test.
 
 ## Changelog
 
-`CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/)
-and Semantic Versioning; the version in `package.json` is the source of truth.
-
-- `bun run changelog` regenerates the file from the git log via
-  [`auto-changelog`](https://github.com/CookPete/auto-changelog) (the
-  `--template keepachangelog` template). Output is raw: version titles carry
-  the `v` prefix, sections land under a single `### Commits` header, and the
-  response comparison links are not appended. **Regen is a starting point, not
-  a finished file.** Curate by hand afterward (strip `v`, recategorize under
-  `### Added` / `### Changed` / `### Fixed`, append comparison links, drop
-  `chore:`/`docs:`/`ci:`/`test:` noise).
-- Unreleased work goes under `## [Unreleased]` at the top of the file. At
-  release time, rename it to `## [X.Y.Z] - YYYY-MM-DD` on the day you tag the
-  commit. Append a `[unreleased]: …compare/vX.Y.Z...HEAD` link alongside the
-  new `[X.Y.Z]:` link; when there is no unreleased work, omit both the section
-  header and the comparison link together.
-- `auto-changelog` lives in `devDependencies` — release tooling is part of the
-  deployment, not a runtime concern.
+Changelog and versioning conventions live in `CONTRIBUTING.md` (Releasing);
+follow them when cutting a release. `package.json` is the version source of
+truth — keep `index.ts` `.version(...)` synced. `bun run changelog` regenerates
+a raw starting point from `git log`.
 
 ---
 

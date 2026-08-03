@@ -89,8 +89,7 @@ Follow the workflow in `CONTRIBUTING.md`: open an issue describing the user
 outcome, motivation, and acceptance criteria; create a feature branch from the
 latest `origin/main` in an isolated worktree; commit each verified slice with a
 Conventional Commit message; and open a draft pull request. Versioning and
-release notes follow `AGENTS.md` (`package.json` is the version source of truth,
-`index.ts` reports the same version, and `CHANGELOG.md` records the release).
+release notes follow `CONTRIBUTING.md` (Releasing).
 
 ---
 
