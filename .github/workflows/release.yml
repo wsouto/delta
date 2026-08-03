@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$(git rev-parse "$TAG^{commit}")"
-          PACKAGE_NAME="delta-${TAG}-linux-x64"
+          PACKAGE_NAME="delta-linux-x64"
           PACKAGE_DIR="dist/${PACKAGE_NAME}"
           ARCHIVE="dist/${PACKAGE_NAME}.tar.gz"
           mkdir -p "$PACKAGE_DIR"
@@ -47,5 +47,5 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          ARCHIVE="dist/delta-${TAG}-linux-x64.tar.gz"
+          ARCHIVE="dist/delta-linux-x64.tar.gz"
           gh release upload "$TAG" "$ARCHIVE" --clobber
