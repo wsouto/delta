@@ -75,84 +75,22 @@ The per-feature test coverage is listed in each feature's acceptance criteria.
 
 ### Final Validation
 
-Before marking a feature complete:
-
-- Run the full test suite;
-- Run lint checks;
-- Run formatting checks;
-- Run type checking, if configured;
-- Run all build validation, if configured;
-- Run commit hooks;
-- Run the same checks performed by CI.
-
-All checks must pass without disabling or weakening existing validation.
+Before marking a feature complete, run the local verification documented in
+`CONTRIBUTING.md` (`bun run check`, `bun run build`, and the non-mutating
+compiled smoke tests), plus any additional formatting, Markdown, or TOML checks
+configured by the repository. All checks must pass without disabling or
+weakening existing validation.
 
 ### Delivery Process
 
 Apply to every feature after its implementation step is complete.
 
-1. **Prepare Feature Branch and Issue**
-
-   - Open a GitHub issue describing the user outcome, motivation, and observable acceptance criteria.
-   - Start a feature branch from the latest `origin/main` using the issue number in its name.
-   - Keep the working tree isolated from `main`.
-
-   Acceptance criteria:
-
-   - The issue exists and is linked to the feature.
-   - The branch is based on current `origin/main`.
-   - No unrelated changes are included.
-
-2. **Verify, Version, and Commit**
-
-   Determine the appropriate semantic version bump for the feature.
-
-   Run repository checks required by `AGENTS.md`, `CONTRIBUTING.md`, and CI.
-   Update the version source of truth and synchronized CLI metadata, and update release notes.
-   Review the complete diff, then create atomic Conventional Commit(s).
-
-   Versioning:
-
-   - `package.json` is the version source of truth.
-   - Keep `index.ts` CLI version synchronized with `package.json`.
-   - Record the user-visible release change in `CHANGELOG.md`.
-
-   Acceptance criteria:
-
-   - The version bump matches the user-visible scope.
-   - `package.json` and `index.ts` report the same version.
-   - `CHANGELOG.md` contains the corresponding release note.
-   - Tests, lint, formatting, type checking, build, hooks, and CI-equivalent checks pass.
-   - The commit contains only the feature's changes.
-   - Commit message follows Conventional Commits.
-
-3. **Push and Open Draft Pull Request**
-
-   Push the feature branch and open a draft pull request targeting `main`.
-   Include:
-
-   - Summary;
-   - acceptance criteria and implementation status;
-   - verification commands and results;
-   - `Closes #<issue-number>`.
-
-   Acceptance criteria:
-
-   - The remote branch is available.
-   - Draft pull request targets `main`.
-   - Pull request describes all the feature's changes and validation evidence.
-   - Issue and pull request are linked.
-
-4. **Handoff for Review and Merge**
-
-   Stop implementation work after the draft pull request is ready.
-   The maintainer reviews, accepts, marks the pull request ready, and merges it.
-
-   Acceptance criteria:
-
-   - Review handoff is explicit.
-   - No merge, approval, or release tag is performed by the implementation agent.
-   - Post-merge cleanup is performed only after maintainer merge.
+Follow the workflow in `CONTRIBUTING.md`: open an issue describing the user
+outcome, motivation, and acceptance criteria; create a feature branch from the
+latest `origin/main` in an isolated worktree; commit each verified slice with a
+Conventional Commit message; and open a draft pull request. Versioning and
+release notes follow `AGENTS.md` (`package.json` is the version source of truth,
+`index.ts` reports the same version, and `CHANGELOG.md` records the release).
 
 ---
 
