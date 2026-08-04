@@ -89,7 +89,7 @@ compiled smoke tests), plus any additional formatting, Markdown, or TOML checks
 configured by the repository. All checks must pass without disabling or
 weakening existing validation.
 
-## [ ] Feature 1: Add a Tool
+## [x] Feature 1: Add a Tool
 
 Implement:
 

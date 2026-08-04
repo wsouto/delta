@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
+import { mkdir, rename, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { isCancel, text } from "@clack/prompts";
 import { Command } from "commander";
 import { Octokit } from "@octokit/rest";
 import picocolors from "picocolors";
@@ -106,6 +108,57 @@ export async function loadTools(
     const message = error instanceof Error ? error.message : String(error);
     throw new ConfigError(path, `unable to read configuration: ${message}`);
   }
+}
+
+function isEmptyToolConfig(source: string): boolean {
+  try {
+    const config = Bun.TOML.parse(source);
+    if (!config || typeof config !== "object" || Array.isArray(config)) return false;
+    const entries = Object.entries(config);
+    if (entries.length === 0) return true;
+    if (entries.length !== 1) return false;
+    const [name, value] = entries[0]!;
+    return (
+      name === "tools" &&
+      !!value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.keys(value).length === 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function loadToolsForAdd(
+  path: string,
+  readFile: (configPath: string) => Promise<string> = (configPath) => Bun.file(configPath).text(),
+): Promise<{ status: "loaded"; tools: Tool[]; source: string } | { status: "missing"; source: string }> {
+  try {
+    const source = await readFile(path);
+    try {
+      return { status: "loaded", tools: parseTools(source, path), source };
+    } catch (error) {
+      if (error instanceof ConfigError && isEmptyToolConfig(source)) {
+        return { status: "loaded", tools: [], source };
+      }
+      throw error;
+    }
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code === "ENOENT") return { status: "missing", source: "" };
+    if (error instanceof ConfigError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ConfigError(path, `unable to read configuration: ${message}`);
+  }
+}
+
+function toolToml(bin: string, tool: { repository: string; versionCommand: string; updateCommand: string }): string {
+  const key = /^[A-Za-z0-9_-]+$/.test(bin) ? bin : JSON.stringify(bin);
+  return `[tools.${key}]
+repository = ${JSON.stringify(tool.repository)}
+version_command = ${JSON.stringify(tool.versionCommand)}
+update_command = ${JSON.stringify(tool.updateCommand)}
+`;
 }
 
 export type RunShell = (cmd: string) => Promise<{ output: string; exitCode: number }>;
@@ -237,6 +290,12 @@ After saving the file, run Delta again.
 export type CliDeps = {
   configPath?: string;
   readFile?: (configPath: string) => Promise<string>;
+  writeFile?: (configPath: string, content: string) => Promise<void>;
+  renameFile?: (from: string, to: string) => Promise<void>;
+  removeFile?: (path: string) => Promise<void>;
+  makeDir?: (path: string) => Promise<void>;
+  prompt?: (message: string) => Promise<string | symbol>;
+  isCancelled?: (value: string | symbol) => boolean;
   updaterDeps?: UpdaterDeps;
 };
 
@@ -245,9 +304,10 @@ export function buildProgram(deps: CliDeps = {}): Command {
     .name("delta")
     .description("Keep curated CLI tools up to date against their latest GitHub releases")
     .version("0.1.0")
-    .option("-c, --config <path>", "read tool configuration from this path")
+    .option("-c, --config <path>", "read/write tool configuration at this path")
+    .option("-a, --add <tool>", "add a tool to configuration")
     .option("--print-config-path", "print resolved configuration path and exit")
-    .action(async (options: { config?: string; printConfigPath?: boolean }) => {
+    .action(async (options: { add?: string; config?: string; printConfigPath?: boolean }) => {
       const configPath =
         options.config ??
         deps.configPath ??
@@ -255,22 +315,18 @@ export function buildProgram(deps: CliDeps = {}): Command {
           xdgConfigHome: process.env["XDG_CONFIG_HOME"],
           homeDir: homedir(),
         });
-      if (options.printConfigPath) {
-        if (deps.updaterDeps) deps.updaterDeps.out(`${configPath}\n`);
-        else process.stdout.write(`${configPath}\n`);
-        return;
-      }
 
       const updaterDeps =
         deps.updaterDeps ??
         (() => {
-          const octokit = new Octokit({ auth: process.env["GITHUB_TOKEN"] });
+          let octokit: Octokit | undefined;
           return {
             commandExists: (bin: string) => Bun.which(bin) !== null,
             runShell,
             getLatestTag: async (repo: string) => {
+              const client = (octokit ??= new Octokit({ auth: process.env["GITHUB_TOKEN"] }));
               const [owner, name] = repo.split("/") as [string, string];
-              const { data } = await octokit.rest.repos.getLatestRelease({ owner, repo: name });
+              const { data } = await client.rest.repos.getLatestRelease({ owner, repo: name });
               return data.tag_name;
             },
             out: (s: string) => {
@@ -283,6 +339,74 @@ export function buildProgram(deps: CliDeps = {}): Command {
         })();
 
       try {
+        if (options.add !== undefined && options.printConfigPath) {
+          throw new ConfigError(configPath, "--add and --print-config-path cannot be used together");
+        }
+        if (options.printConfigPath) {
+          updaterDeps.out(`${configPath}\n`);
+          return;
+        }
+        if (options.add !== undefined) {
+          const bin = options.add.trim();
+          if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
+          const prompt = deps.prompt ?? ((message: string) => text({ message }));
+          const isPromptCancelled = deps.isCancelled ?? isCancel;
+          const config = await loadToolsForAdd(configPath, deps.readFile);
+          if (config.status === "loaded" && config.tools.some((tool) => tool.bin === bin)) {
+            throw new ConfigError(configPath, `tool "${bin}" already exists`);
+          }
+
+          const existingSource = config.source;
+          let source = "";
+          while (!source) {
+            const values: string[] = [];
+            for (const message of ["Repository URL", "Version command", "Update command"]) {
+              const value = await prompt(message);
+              if (isPromptCancelled(value)) {
+                updaterDeps.out("Add cancelled\n");
+                return;
+              }
+              if (typeof value !== "string") {
+                throw new ConfigError(configPath, "prompt did not return text");
+              }
+              values.push(value.trim());
+            }
+            const [repository, versionCommand, updateCommand] = values as [string, string, string];
+            const addition = toolToml(bin, { repository, versionCommand, updateCommand });
+            const candidate =
+              config.status === "missing"
+                ? addition
+                : `${existingSource}${existingSource.endsWith("\n") ? "\n" : "\n\n"}${addition}`;
+            try {
+              parseTools(candidate, configPath);
+              source = candidate;
+            } catch (error) {
+              if (error instanceof ConfigError) {
+                updaterDeps.err(`${picocolors.bold(picocolors.red("[error]"))} ${error.message}\n`);
+                continue;
+              }
+              throw error;
+            }
+          }
+
+          const temporaryPath = `${configPath}.${crypto.randomUUID()}.tmp`;
+          await (deps.makeDir ?? (async (path: string) => mkdir(path, { recursive: true })))(
+            dirname(configPath),
+          );
+          try {
+            await (deps.writeFile ??
+              (async (path: string, content: string) => {
+                await Bun.write(path, content);
+              }))(temporaryPath, source);
+            await (deps.renameFile ?? rename)(temporaryPath, configPath);
+          } catch (error) {
+            await (deps.removeFile ?? unlink)(temporaryPath).catch(() => {});
+            throw error;
+          }
+          updaterDeps.out(`Added tool ${bin}\n`);
+          return;
+        }
+
         const config = await loadTools(configPath, deps.readFile);
         if (config.status === "missing") {
           updaterDeps.out(firstRunMessage(configPath));

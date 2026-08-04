@@ -554,6 +554,393 @@ describe("delta CLI", () => {
     expect(stdout).toContain("--print-config-path");
   });
 
+  test("--help documents add option", () => {
+    const { stdout } = captureRun(["--help"]);
+    expect(stdout).toContain("-a, --add <tool>");
+  });
+
+  test("--help describes --config as writable", () => {
+    const { stdout } = captureRun(["--help"]);
+    expect(stdout).toContain("read/write tool configuration");
+  });
+
+  test("adds prompted tool to missing configuration", async () => {
+    const { deps, out, err } = captureUpdater();
+    const answers = [
+      "https://github.com/owner/example",
+      "example --version",
+      "example update",
+    ];
+    const writes: Array<[string, string]> = [];
+    const renames: Array<[string, string]> = [];
+
+    await buildProgram({
+      configPath: "/tmp/delta/delta.toml",
+      readFile: async () => {
+        throw Object.assign(new Error("not found"), { code: "ENOENT" });
+      },
+      updaterDeps: deps,
+      prompt: async () => answers.shift()!,
+      makeDir: async () => {},
+      writeFile: async (path, content) => {
+        writes.push([path, content]);
+      },
+      renameFile: async (from, to) => {
+        renames.push([from, to]);
+      },
+    }).parseAsync(["node", "delta", "--add", "example"]);
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.[1]).toContain("[tools.example]");
+    expect(writes[0]?.[1]).toContain('repository = "https://github.com/owner/example"');
+    expect(renames).toHaveLength(1);
+    expect(out.join("")).toContain("Added tool example");
+    expect(err.join("")).toBe("");
+  });
+
+  test("adds prompted tool to empty configuration", async () => {
+    const { deps, err } = captureUpdater();
+    let written = "";
+
+    await buildProgram({
+      configPath: "/tmp/delta/delta.toml",
+      readFile: async () => "# Configure tools below\n",
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version",
+          "Update command": "example update",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--add", "example"]);
+
+    expect(written).toContain("# Configure tools below");
+    expect(written).toContain("[tools.example]");
+    expect(err.join("")).toBe("");
+  });
+
+  test("cancelling add leaves configuration unchanged", async () => {
+    const { deps, out, err } = captureUpdater();
+    const cancelled = Symbol("cancelled");
+    let wrote = false;
+
+    await buildProgram({
+      configPath: "/tmp/delta/delta.toml",
+      readFile: async () => {
+        throw Object.assign(new Error("not found"), { code: "ENOENT" });
+      },
+      updaterDeps: deps,
+      prompt: async () => cancelled,
+      isCancelled: (value) => value === cancelled,
+      makeDir: async () => {},
+      writeFile: async () => {
+        wrote = true;
+      },
+      renameFile: async () => {
+        wrote = true;
+      },
+    }).parseAsync(["node", "delta", "--add", "example"]);
+
+    expect(wrote).toBeFalse();
+    expect(out.join("")).toBe("Add cancelled\n");
+    expect(err.join("")).toBe("");
+  });
+
+  test("rejects duplicate tool without prompting or writing", async () => {
+    const { deps, err } = captureUpdater();
+    const exitCode = process.exitCode;
+    let prompted = false;
+    let wrote = false;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/delta.toml",
+        readFile: async () => `
+[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`,
+        updaterDeps: deps,
+        prompt: async () => {
+          prompted = true;
+          return "unused";
+        },
+        writeFile: async () => {
+          wrote = true;
+        },
+      }).parseAsync(["node", "delta", "--add", "example"]);
+
+      expect(prompted).toBeFalse();
+      expect(wrote).toBeFalse();
+      expect(err.join("")).toContain('tool "example" already exists');
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("re-prompts after invalid values before writing", async () => {
+    const { deps, err } = captureUpdater();
+    const answers = [
+      " ",
+      " ",
+      " ",
+      "https://github.com/owner/example",
+      "example --version",
+      "example update",
+    ];
+    let wrote = false;
+
+    await buildProgram({
+      configPath: "/tmp/delta/delta.toml",
+      readFile: async () => {
+        throw Object.assign(new Error("not found"), { code: "ENOENT" });
+      },
+      updaterDeps: deps,
+      prompt: async () => answers.shift()!,
+      writeFile: async () => {
+        wrote = true;
+      },
+      renameFile: async () => {},
+      makeDir: async () => {},
+    }).parseAsync(["node", "delta", "--add", "example"]);
+
+    expect(wrote).toBeTrue();
+    expect(err.join("")).toContain("invalid configuration");
+  });
+
+  test("rejects empty tools table plus extra top-level keys without prompting", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+    let prompted = false;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/delta.toml",
+        readFile: async () => "[tools]\n\n[other]\nvalue = 1\n",
+        updaterDeps: deps,
+        prompt: async () => {
+          prompted = true;
+          return "unused";
+        },
+      }).parseAsync(["node", "delta", "--add", "example"]);
+
+      expect(prompted).toBeFalse();
+      expect(err.join("")).toContain("invalid configuration");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("does not replace configuration when temporary write fails", async () => {
+    const { deps, err } = captureUpdater();
+    const exitCode = process.exitCode;
+    let renamed = false;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/delta.toml",
+        readFile: async () => {
+          throw Object.assign(new Error("not found"), { code: "ENOENT" });
+        },
+        updaterDeps: deps,
+        prompt: async (message) =>
+          ({
+            "Repository URL": "https://github.com/owner/example",
+            "Version command": "example --version",
+            "Update command": "example update",
+          })[message]!,
+        makeDir: async () => {},
+        writeFile: async () => {
+          throw new Error("disk full");
+        },
+        renameFile: async () => {
+          renamed = true;
+        },
+      }).parseAsync(["node", "delta", "--add", "example"]);
+
+      expect(renamed).toBeFalse();
+      expect(err.join("")).toContain("disk full");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("removes temporary configuration when rename fails", async () => {
+    const { deps, err } = captureUpdater();
+    const exitCode = process.exitCode;
+    const removed: string[] = [];
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/delta.toml",
+        readFile: async () => {
+          throw Object.assign(new Error("not found"), { code: "ENOENT" });
+        },
+        updaterDeps: deps,
+        prompt: async (message) =>
+          ({
+            "Repository URL": "https://github.com/owner/example",
+            "Version command": "example --version",
+            "Update command": "example update",
+          })[message]!,
+        makeDir: async () => {},
+        writeFile: async () => {},
+        renameFile: async () => {
+          throw new Error("rename failed");
+        },
+        removeFile: async (path) => {
+          removed.push(path);
+        },
+      }).parseAsync(["node", "delta", "--add", "example"]);
+
+      expect(removed).toHaveLength(1);
+      expect(err.join("")).toContain("rename failed");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("preserves existing tool definition when adding another", async () => {
+    const { deps } = captureUpdater();
+    const existing = `[tools.old]
+repository = "https://github.com/owner/old"
+version_command = "old --version"
+update_command = "old update"
+`;
+    let written = "";
+
+    await buildProgram({
+      configPath: "/tmp/delta/delta.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/new",
+          "Version command": "new --version",
+          "Update command": "new update",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--add", "new"]);
+
+    expect(written).toContain(existing);
+    expect(written).toContain("[tools.new]");
+  });
+
+  test("--add requires a tool argument", () => {
+    const { error } = captureRun(["--add"]);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/argument missing/i);
+  });
+
+  test("--add rejects an empty tool name", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/delta.toml",
+        readFile: async () => {
+          throw new Error("must not read");
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--add", ""]);
+
+      expect(err.join("")).toContain("tool name must not be empty");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("--add conflicts with --print-config-path", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/delta.toml",
+        readFile: async () => {
+          throw new Error("must not read");
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--add", "example", "--print-config-path"]);
+
+      expect(err.join("")).toContain("cannot be used together");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("--add honors --config", async () => {
+    const { deps } = captureUpdater();
+    let renamedTo = "";
+
+    await buildProgram({
+      configPath: "/ignored/delta.toml",
+      readFile: async (path) => {
+        expect(path).toBe("/tmp/custom-delta.toml");
+        throw Object.assign(new Error("not found"), { code: "ENOENT" });
+      },
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version",
+          "Update command": "example update",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async () => {},
+      renameFile: async (_from, to) => {
+        renamedTo = to;
+      },
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--add", "example"]);
+
+    expect(renamedTo).toBe("/tmp/custom-delta.toml");
+  });
+
+  test("--add uses resolved XDG path by default", async () => {
+    const { deps } = captureUpdater();
+    const previous = process.env["XDG_CONFIG_HOME"];
+    process.env["XDG_CONFIG_HOME"] = "/tmp/delta-xdg";
+    let renamedTo = "";
+    try {
+      await buildProgram({
+        readFile: async (path) => {
+          expect(path).toBe("/tmp/delta-xdg/delta/delta.toml");
+          throw Object.assign(new Error("not found"), { code: "ENOENT" });
+        },
+        updaterDeps: deps,
+        prompt: async (message) =>
+          ({
+            "Repository URL": "https://github.com/owner/example",
+            "Version command": "example --version",
+            "Update command": "example update",
+          })[message]!,
+        makeDir: async () => {},
+        writeFile: async () => {},
+        renameFile: async (_from, to) => {
+          renamedTo = to;
+        },
+      }).parseAsync(["node", "delta", "--add", "example"]);
+    } finally {
+      process.env["XDG_CONFIG_HOME"] = previous;
+    }
+
+    expect(renamedTo).toBe("/tmp/delta-xdg/delta/delta.toml");
+  });
+
   test("--config overrides default configuration path", async () => {
     const { deps, out } = captureUpdater();
     const exitCode = process.exitCode;
