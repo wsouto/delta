@@ -6,7 +6,7 @@ version against the latest GitHub release. `index.ts` is the implementation; run
 
 ## What It Does
 
-For each entry in the `tools` array in `index.ts`:
+For each `[tools.<name>]` table in `delta.toml`:
 
 1. Skips the tool when its binary is not on `PATH`.
 2. Runs its configured version command and extracts the first `X.Y.Z` regex match.
@@ -15,11 +15,14 @@ For each entry in the `tools` array in `index.ts`:
 
 ## Repo Layout
 
-- `index.ts` — implementation and declarative tool list.
+- `index.ts` — implementation and CLI; tool definitions come from `delta.toml`, not the source.
 - `index.test.ts` — `bun:test` behavior tests; injects fakes at the system boundaries.
+- `delta.toml` — declarative tool list; `[tools.delta]` tracks Delta itself.
+- `install.sh` — download + atomic install script fetched by the `[tools.delta]` `update_command`.
 - `README.md` — user-facing usage and development notes.
 - `CHANGELOG.md` — release notes (Keep a Changelog 1.1.0); the committed file is
   curated by hand. `bun run changelog` regenerates a raw starting point from `git log`.
+- `openspec/` — OpenSpec change proposals and capability specs.
 
 ## Hard-Won Context
 
@@ -38,15 +41,21 @@ For each entry in the `tools` array in `index.ts`:
 - **Tool records are structured objects typed at parse time.**
   `v.parse(v.array(ToolSchema), tools)` at the top of `runUpdater` fail-fasts on bad config —
   source literals are programmer errors, not runtime input.
+- **Self-update rides a repo-root `install.sh`.** The `[tools.delta]` `update_command`
+  is a single `curl -fsSL https://raw.githubusercontent.com/wsouto/delta/main/install.sh | sh`;
+  the script owns download + atomic install. Keep `release.yml` publishing the
+  version-stable asset `delta-linux-x64.tar.gz` — the v0.1.0 asset was misnamed
+  (`delta-v0.1.0-linux-x64.tar.gz`) and silently broke the stable download URL.
 
 ## Adding a Tool
 
-Append one object to the `tools` array. Every field is required:
+Define one `[tools.<name>]` table in `delta.toml`. The table name is the binary
+checked with `Bun.which`. Every field is required:
 
-- `bin` — executable checked with `Bun.which`.
-- `repo` — GitHub `owner/repo` resolved by `@octokit/rest`'s `getLatestRelease`.
-- `versionCmd` — command whose output contains an `X.Y.Z` version.
-- `updateCmd` — command run when installed and latest versions differ.
+- `repository` — GitHub repository URL resolved by `@octokit/rest`'s `getLatestRelease`.
+- `version_command` — command whose output contains an `X.Y.Z` version.
+- `update_command` — command run when installed and latest versions differ. It runs
+  in a child bash process; keep it a trusted source literal.
 
 ## Verification
 

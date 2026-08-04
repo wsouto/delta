@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - OpenSpec CLI commands and skills for OpenCode.
+- Delta updates its own config entry from the prebuilt release binary instead of rebuilding from source.
 
 ### Changed
 
 - Clarified the contributing guide to focus on the agent workflow and release steps.
 - Expanded the tool administration roadmap with feature lifecycle, write semantics, and add/edit/delete requirements.
 - Renamed the working TODO notes to ROADMAP.md and aligned the README TODO entry.
+- The `[tools.delta]` update command now delegates to a repo-owned `install.sh` via a single `curl ... | sh`.
 
 ---
 

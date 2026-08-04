@@ -61,6 +61,12 @@ update_command = "curl -fsL https://ewry.net/droast/install.sh | sh"
 repository = "https://github.com/voidzero-dev/vite-plus"
 version_command = "vp --version"
 update_command = "vp upgrade"
+
+[tools.delta]
+repository = "https://github.com/wsouto/delta"
+version_command = "delta --version"
+# install.sh downloads the prebuilt release and installs it to ~/.local/bin
+update_command = "curl -fsSL https://raw.githubusercontent.com/wsouto/delta/main/install.sh | sh"
 ```
 
 ## Prerequisites
@@ -72,7 +78,7 @@ update_command = "vp upgrade"
 ## Authentication
 
 The latest release tag is fetched from `https://api.github.com/repos/{owner}/{repo}/releases/latest`
-via `@octokit/rest`. Unauthenticated requests work at 60 req/hr — plenty for three tools.
+via `@octokit/rest`. Unauthenticated requests work at 60 req/hr — plenty for a handful of tools.
 For higher limits, set `GITHUB_TOKEN`:
 
 ```sh
@@ -98,6 +104,8 @@ bun run build   # produces ./delta (gitignored)
   they are trusted source literals, not user input.
 - Failures set the final exit status to 1 but do not stop checks for later tools.
 - Colors are emitted only when stdout is a TTY; `[no-op]` is bold white.
+- Delta installs itself from the prebuilt release via the repo-root `install.sh`;
+  the `[tools.delta]` `update_command` is a single `curl ... | sh`.
 
 ## TODO
 
