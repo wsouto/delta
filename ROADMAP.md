@@ -91,10 +91,14 @@ Use this workflow across the entire feature:
    as `upstream` and use that.
 3. Implement the feature using the TDD requirements above. Verify each slice
    before committing it with a scoped Conventional Commit message.
-4. Run Final Validation before feature-completion bookkeeping.
-5. Mark the applicable roadmap checkbox complete and commit that update so the
+4. Update `README.md` and `AGENTS.md` when the feature changes user-facing
+   behavior, CLI usage, configuration, or project guidance. Keep both files
+   consistent with the implementation, and leave them unchanged when no update
+   is needed.
+5. Run Final Validation before feature-completion bookkeeping.
+6. Mark the applicable roadmap checkbox complete and commit that update so the
    pull request contains verified status.
-6. Open a draft pull request against `main` with exactly these sections:
+7. Open a draft pull request against `main` with exactly these sections:
    `Summary`, `Acceptance`, `Verification`, and `Related issue`. Include
    `Closes #<issue-number>` where applicable.
 
