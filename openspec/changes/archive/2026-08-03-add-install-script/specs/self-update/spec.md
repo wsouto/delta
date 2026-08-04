@@ -1,18 +1,7 @@
-# self-update Specification
-
-## Purpose
-
-Lets Delta update its own config entry by downloading the prebuilt release binary
-instead of rebuilding itself from source, installable on any machine with a shell.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Self entry installs from the release artifact
-The `[tools.delta]` entry in the user's `delta.toml` SHALL install the prebuilt
-binary from the GitHub release artifact by performing a single `curl | sh`, where
-the fetched script (`install.sh`) performs the release download and install. The
-`update_command` SHALL NOT embed the download or install shell logic inline in the
-config.
+The `[tools.delta]` entry in the user's `delta.toml` SHALL install the prebuilt binary from the GitHub release artifact by performing a single `curl | sh`, where the fetched script (`install.sh`) performs the release download and install. The `update_command` SHALL NOT embed the download or install shell logic inline in the config.
 
 #### Scenario: Update downloads the release binary via install.sh
 - **WHEN** the installed Delta version differs from the latest release tag and the updater runs the `update_command` for the `delta` tool
@@ -27,10 +16,7 @@ config.
 - **THEN** it completes without requiring a local copy of the repository or a source build step
 
 ### Requirement: Install script has a version-stable URL
-The `install.sh` script SHALL be fetchable from a stable, version-independent URL
-so the configured `update_command` keeps working across releases without an edit
-to `delta.toml`. The script SHALL itself resolve the `releases/latest/download`
-artifact URL so a new release is picked up automatically.
+The `install.sh` script SHALL be fetchable from a stable, version-independent URL so the configured `update_command` keeps working across releases without an edit to `delta.toml`. The script SHALL itself resolve the `releases/latest/download` artifact URL so a new release is picked up automatically.
 
 #### Scenario: Latest release resolves without config edit
 - **WHEN** a new release is published
@@ -41,9 +27,7 @@ artifact URL so a new release is picked up automatically.
 - **THEN** the `curl` pipeline targets the same stable script URL regardless of which release is current
 
 ### Requirement: Installed binary is replaced atomically
-The fetched `install.sh` SHALL stage the downloaded binary in a temporary location
-and only then move it into place, so a failed or interrupted download never leaves
-a truncated binary on PATH.
+The fetched `install.sh` SHALL stage the downloaded binary in a temporary location and only then move it into place, so a failed or interrupted download never leaves a truncated binary on PATH.
 
 #### Scenario: Interrupted download preserves the previous binary
 - **WHEN** the download of a new release artifact fails mid-transfer
@@ -54,8 +38,7 @@ a truncated binary on PATH.
 - **THEN** the staged binary is moved into the install location and becomes the one resolved on PATH
 
 ### Requirement: Installed binary lands on PATH
-The fetch-and-install flow SHALL install the binary to a location where Delta's
-PATH lookup (`Bun.which`) resolves it, so subsequent runs detect the new version.
+The fetch-and-install flow SHALL install the binary to a location where Delta's PATH lookup (`Bun.which`) resolves it, so subsequent runs detect the new version.
 
 #### Scenario: Path lookup finds the updated binary
 - **WHEN** the update completes
