@@ -71,16 +71,6 @@ Mock or abstract interactive prompts where necessary so tests remain determinist
 
 The per-feature test coverage is listed in each feature’s acceptance criteria.
 
-### Feature Lifecycle
-
-Apply this workflow after a feature implementation is complete:
-
-1. Open an issue describing the user outcome, motivation, and observable acceptance criteria.
-2. Create a feature branch from the latest `origin/main` in an isolated worktree.
-3. Commit each verified slice with a Conventional Commit message.
-4. Open a draft pull request.
-5. Follow the versioning and release-note workflow in `CONTRIBUTING.md` when the feature is ready to ship.
-
 ### Final Validation
 
 Before marking a feature complete, run the local verification documented in
@@ -88,6 +78,29 @@ Before marking a feature complete, run the local verification documented in
 compiled smoke tests), plus any additional formatting, Markdown, or TOML checks
 configured by the repository. All checks must pass without disabling or
 weakening existing validation.
+
+### Feature Lifecycle
+
+Use this workflow across the entire feature:
+
+1. Open an issue before making user-visible changes. Describe the intended user
+   outcome, motivation, and one to five observable acceptance criteria.
+2. Create `feat/<issue-number>-<short-kebab-slug>` from the current
+   `<base-remote>/main` in an isolated worktree and install locked dependencies.
+   Use `origin` when contributing directly; for forks, add the main repository
+   as `upstream` and use that.
+3. Implement the feature using the TDD requirements above. Verify each slice
+   before committing it with a scoped Conventional Commit message.
+4. Run Final Validation before feature-completion bookkeeping.
+5. Mark the applicable roadmap checkbox complete and commit that update so the
+   pull request contains verified status.
+6. Open a draft pull request against `main` with exactly these sections:
+   `Summary`, `Acceptance`, `Verification`, and `Related issue`. Include
+   `Closes #<issue-number>` where applicable.
+
+The feature lifecycle ends when the draft pull request is opened. The user or
+maintainer takes over review, merge, post-merge verification, and release work
+under `CONTRIBUTING.md`.
 
 ## [x] Feature 1: Add a Tool
 
@@ -128,7 +141,7 @@ Implement:
 - Relevant automated tests pass.
 - Preservation of existing CLI behavior.
 
-When complete, apply the Feature Lifecycle.
+Complete the Feature Lifecycle to finish this feature.
 
 ---
 
@@ -174,7 +187,7 @@ Implement:
 - Relevant automated tests pass.
 - Preservation of existing CLI behavior.
 
-When complete, apply the Feature Lifecycle.
+Complete the Feature Lifecycle to finish this feature.
 
 ---
 
@@ -223,7 +236,7 @@ Implement:
 - Relevant automated tests pass.
 - Preservation of existing CLI behavior.
 
-When complete, apply the Feature Lifecycle.
+Complete the Feature Lifecycle to finish this feature.
 
 ---
 
@@ -236,5 +249,5 @@ A Tool Administration feature is complete only when:
 - Cancellation never causes partial changes;
 - Existing CLI behavior remains functional;
 - All tests and repository checks pass;
-- The Feature Lifecycle has been applied;
-- This roadmap is updated to mark verified work as complete.
+- The Feature Lifecycle has been completed through opening the draft pull request;
+- This roadmap’s verified checkbox is updated before that pull request opens.
