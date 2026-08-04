@@ -107,9 +107,7 @@ a raw starting point from `git log`.
 
 - **Pre-commit runs `bun run check` in parallel.** Passing `bun test` alone is not enough;
   typecheck and lint must also pass.
-- **Always lint project Markdown files with `markdownlint`.** Run it on every `*.md` outside
-  `.agents/` (`README.md`, `AGENTS.md`, etc.) before committing. Managed skill Markdown under
-  `.agents/` is excluded. Fix the violations, don't suppress them.
+- **Always lint the AGENTS.md, README.md, and CONTRIBUTING.md files with `markdownlint` when modifications are done.**
 - **Always lint project TOML files with `taplo`.** Run it on every `*.toml` (`lefthook.yml`, etc.)
   before committing. Fix the violations, don't suppress them.
 - **`delta` is gitignored.** `bun build --compile` writes the binary to repo root; do not
