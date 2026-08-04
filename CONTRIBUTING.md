@@ -88,9 +88,25 @@ evidence.
 
 ## Merge Checklist (Maintainers)
 
-Squash and merge after checks, approvals, conversations, and branch freshness
-requirements are satisfied. Do not create a release tag for ordinary feature
-work. After merging:
+Merge the pull request after checks, approvals, conversations, and branch
+freshness requirements are satisfied.
+
+Before merging, rebase the feature branch onto the current
+`<base-remote>/main` when required, resolve conflicts on the feature branch,
+rerun the full verification gate and push the updated branch.
+
+Each pull request should contain meaningful, reviewable commits that represent
+logical and verified changes. Temporary WIP and fixup commits are acceptable
+during development and review, but consolidate them before final verification
+when they would add noise to the permanent history.
+
+Use GitHub's `Create a merge commit` option. Do not squash or rebase-merge the
+pull request: the merge commit preserves the pull request as an integration
+boundary while retaining its constituent commits in the repository history.
+
+Do not create a release tag for ordinary feature work.
+
+After merging:
 
 1. Confirm post-merge CI succeeds.
 2. Update the original checkout's `main` branch.
