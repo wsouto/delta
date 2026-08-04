@@ -185,7 +185,7 @@ Create and publish a GitHub Release from the tag, using the corresponding
 `CHANGELOG.md` section as its release notes. Publishing the release triggers
 `.github/workflows/release.yml`, which builds and uploads the Linux x64 archive.
 
-Confirm the workflow succeeds and `delta-vX.Y.Z-linux-x64.tar.gz` is attached;
+Confirm the workflow succeeds and `delta-linux-x64.tar.gz` is attached;
 verify the packaged binary reports `X.Y.Z`.
 
 Never move, replace, or reuse a published tag. Correct a released problem with

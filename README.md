@@ -6,7 +6,9 @@
 ## Overview
 
 I'm experimenting with many tools, and eventually I settle on one, but until then,
-I need to remember what I installed to experiment in the first. This script is a way to do this.
+I need to remember what I installed to experiment in the first place. This script is a way to do this.
+It's not intended for use with tools installed via the system package manager, of course.
+Moreover, if mise has it, use mise instead.
 
 This is an update tool to check the current version of a given tool like OpenCode or Bun
 and update it using a specified command.
@@ -30,12 +32,32 @@ The tool:
 4. Prints `installed=<v> latest=<v>` for each installed tool.
 5. Runs the configured update command when versions differ.
 
+## Add a Tool
+
+Add a tool without editing TOML:
+
+```sh
+bun run index.ts --add <tool>
+```
+
+The command prompts for the repository URL, version command, and update command.
+It rejects duplicate names and invalid values, leaves the configuration unchanged
+when cancelled, creates missing parent directories, and writes atomically.
+
+Use `bun run index.ts --help` to see all CLI options.
+
 ## Configuration
 
 Delta reads `$XDG_CONFIG_HOME/delta/tools.toml`; when `XDG_CONFIG_HOME` is unset
-or empty, it reads `~/.config/delta/tools.toml`. Create this file before first run.
-Use `--config <path>` to select another file, or `--print-config-path` to show the
-resolved default path and exit.
+or empty, it reads `~/.config/delta/tools.toml`. If the file is missing, a normal
+run prints setup instructions and exits; `--add <tool>` can create it.
+Use `--config <path>` to select another file; `--print-config-path` prints the
+selected configuration path and exits.
+
+The tracked repository `tools.toml` contains an example configuration and is not
+loaded by default; select it explicitly with `--config tools.toml` if needed.
+
+### Example configuration
 
 Each uniquely named tool is a `[tools.<name>]` table. Its name is the binary checked
 on `PATH`; `repository` must be an HTTPS GitHub repository URL.
@@ -82,14 +104,14 @@ via `@octokit/rest`. Unauthenticated requests work at 60 req/hr — plenty for a
 For higher limits, set `GITHUB_TOKEN`:
 
 ```sh
-export GITHUB_TOKEN=ghp_…
+export GITHUB_TOKEN="<token>"
 ```
 
 ## Tests
 
 ```sh
-bun test        # in-process bun:test suite
-bun run check   # typecheck + lint + tests (pre-commit gate)
+  bun test        # in-process bun:test suite
+  bun run check   # typecheck + lint + tests (full local gate)
 ```
 
 ## Build
@@ -101,7 +123,7 @@ bun run build   # produces ./delta (gitignored)
 ## Notes
 
 - Configured version and update commands run in child Bash processes with `pipefail`,
-  they are trusted source literals, not user input.
+  so they are trusted configuration commands; only use values you intend to execute.
 - Failures set the final exit status to 1 but do not stop checks for later tools.
 - Colors are emitted only when stdout is a TTY; `[no-op]` is bold white.
 - Delta installs itself from the prebuilt release via the repo-root `install.sh`;
@@ -109,6 +131,6 @@ bun run build   # produces ./delta (gitignored)
 
 ## TODO
 
-- [ ] Add, edit, and delete tools
+- [ ] Edit and delete tools
 
 _Obs.: This script has little to no utility, but I did it anyway._
