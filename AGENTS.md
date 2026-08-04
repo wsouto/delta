@@ -6,7 +6,7 @@ version against the latest GitHub release. `index.ts` is the implementation; run
 
 ## What It Does
 
-For each `[tools.<name>]` table in `delta.toml`:
+For each `[tools.<name>]` table in `tools.toml`:
 
 1. Skips the tool when its binary is not on `PATH`.
 2. Runs its configured version command and extracts the first `X.Y.Z` regex match.
@@ -15,9 +15,9 @@ For each `[tools.<name>]` table in `delta.toml`:
 
 ## Repo Layout
 
-- `index.ts` — implementation and CLI; tool definitions come from `delta.toml`, not the source.
+- `index.ts` — implementation and CLI; tool definitions come from `tools.toml`, not the source.
 - `index.test.ts` — `bun:test` behavior tests; injects fakes at the system boundaries.
-- `delta.toml` — declarative tool list; `[tools.delta]` tracks Delta itself.
+- `tools.toml` — declarative tool list; `[tools.delta]` tracks Delta itself.
 - `install.sh` — download + atomic install script fetched by the `[tools.delta]` `update_command`.
 - `README.md` — user-facing usage and development notes.
 - `CHANGELOG.md` — release notes (Keep a Changelog 1.1.0); the committed file is
@@ -49,7 +49,7 @@ For each `[tools.<name>]` table in `delta.toml`:
 
 ## Adding a Tool
 
-Define one `[tools.<name>]` table in `delta.toml`. The table name is the binary
+Define one `[tools.<name>]` table in `tools.toml`. The table name is the binary
 checked with `Bun.which`. Every field is required:
 
 - `repository` — GitHub repository URL resolved by `@octokit/rest`'s `getLatestRelease`.

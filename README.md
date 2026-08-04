@@ -32,8 +32,8 @@ The tool:
 
 ## Configuration
 
-Delta reads `$XDG_CONFIG_HOME/delta/delta.toml`; when `XDG_CONFIG_HOME` is unset
-or empty, it reads `~/.config/delta/delta.toml`. Create this file before first run.
+Delta reads `$XDG_CONFIG_HOME/delta/tools.toml`; when `XDG_CONFIG_HOME` is unset
+or empty, it reads `~/.config/delta/tools.toml`. Create this file before first run.
 Use `--config <path>` to select another file, or `--print-config-path` to show the
 resolved default path and exit.
 

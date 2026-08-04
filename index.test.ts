@@ -102,13 +102,13 @@ update_command = "example update"
 describe("configuration path", () => {
   test("uses configured XDG config home", () => {
     expect(resolveConfigPath({ xdgConfigHome: "/tmp/config", homeDir: "/home/test" })).toBe(
-      "/tmp/config/delta/delta.toml",
+      "/tmp/config/delta/tools.toml",
     );
   });
 
   test.each([undefined, ""])("falls back when XDG config home is %p", (xdgConfigHome) => {
     expect(resolveConfigPath({ xdgConfigHome, homeDir: "/home/test" })).toBe(
-      "/home/test/.config/delta/delta.toml",
+      "/home/test/.config/delta/tools.toml",
     );
   });
 });
@@ -116,7 +116,7 @@ describe("configuration path", () => {
 describe("configuration loading", () => {
   test("loads tools from TOML without touching user configuration", async () => {
     const result = await loadTools(
-      "/tmp/delta/delta.toml",
+      "/tmp/delta/tools.toml",
       async () => `
 [tools.example]
 repository = "https://github.com/owner/repository"
@@ -143,7 +143,7 @@ test("feeds loaded TOML tools into the CLI updater", async () => {
   const { deps, out } = captureUpdater();
 
   await buildProgram({
-    configPath: "/tmp/delta/delta.toml",
+    configPath: "/tmp/delta/tools.toml",
     readFile: async () => `
 [tools.example]
 repository = "https://github.com/owner/repository"
@@ -163,7 +163,7 @@ describe("first run", () => {
 
     try {
       await buildProgram({
-        configPath: "/tmp/config/delta/delta.toml",
+        configPath: "/tmp/config/delta/tools.toml",
         readFile: async () => {
           throw Object.assign(new Error("not found"), { code: "ENOENT" });
         },
@@ -172,7 +172,7 @@ describe("first run", () => {
 
       const message = out.join("");
       expect(message).toContain("No tools have been configured yet.");
-      expect(message).toContain("/tmp/config/delta/delta.toml");
+      expect(message).toContain("/tmp/config/delta/tools.toml");
       expect(message).toContain("[tools.example]");
       expect(message).toContain('repository = "https://github.com/owner/repository"');
       expect(message).toContain("After saving the file, run Delta again.");
@@ -188,12 +188,12 @@ describe("first run", () => {
 
     try {
       await buildProgram({
-        configPath: "/tmp/config/delta/delta.toml",
+        configPath: "/tmp/config/delta/tools.toml",
         readFile: async () => "tools = =",
         updaterDeps: deps,
       }).parseAsync(["node", "delta"]);
 
-      expect(err.join("")).toContain("[error] /tmp/config/delta/delta.toml: invalid TOML:");
+      expect(err.join("")).toContain("[error] /tmp/config/delta/tools.toml: invalid TOML:");
       expect(out.join("")).toBe("");
     } finally {
       process.exitCode = exitCode ?? 0;
@@ -575,7 +575,7 @@ describe("delta CLI", () => {
     const renames: Array<[string, string]> = [];
 
     await buildProgram({
-      configPath: "/tmp/delta/delta.toml",
+      configPath: "/tmp/delta/tools.toml",
       readFile: async () => {
         throw Object.assign(new Error("not found"), { code: "ENOENT" });
       },
@@ -603,7 +603,7 @@ describe("delta CLI", () => {
     let written = "";
 
     await buildProgram({
-      configPath: "/tmp/delta/delta.toml",
+      configPath: "/tmp/delta/tools.toml",
       readFile: async () => "# Configure tools below\n",
       updaterDeps: deps,
       prompt: async (message) =>
@@ -630,7 +630,7 @@ describe("delta CLI", () => {
     let wrote = false;
 
     await buildProgram({
-      configPath: "/tmp/delta/delta.toml",
+      configPath: "/tmp/delta/tools.toml",
       readFile: async () => {
         throw Object.assign(new Error("not found"), { code: "ENOENT" });
       },
@@ -659,7 +659,7 @@ describe("delta CLI", () => {
 
     try {
       await buildProgram({
-        configPath: "/tmp/delta/delta.toml",
+        configPath: "/tmp/delta/tools.toml",
         readFile: async () => `
 [tools.example]
 repository = "https://github.com/owner/example"
@@ -697,7 +697,7 @@ update_command = "example update"
     let wrote = false;
 
     await buildProgram({
-      configPath: "/tmp/delta/delta.toml",
+      configPath: "/tmp/delta/tools.toml",
       readFile: async () => {
         throw Object.assign(new Error("not found"), { code: "ENOENT" });
       },
@@ -721,7 +721,7 @@ update_command = "example update"
 
     try {
       await buildProgram({
-        configPath: "/tmp/delta/delta.toml",
+        configPath: "/tmp/delta/tools.toml",
         readFile: async () => "[tools]\n\n[other]\nvalue = 1\n",
         updaterDeps: deps,
         prompt: async () => {
@@ -745,7 +745,7 @@ update_command = "example update"
 
     try {
       await buildProgram({
-        configPath: "/tmp/delta/delta.toml",
+        configPath: "/tmp/delta/tools.toml",
         readFile: async () => {
           throw Object.assign(new Error("not found"), { code: "ENOENT" });
         },
@@ -779,7 +779,7 @@ update_command = "example update"
 
     try {
       await buildProgram({
-        configPath: "/tmp/delta/delta.toml",
+        configPath: "/tmp/delta/tools.toml",
         readFile: async () => {
           throw Object.assign(new Error("not found"), { code: "ENOENT" });
         },
@@ -817,7 +817,7 @@ update_command = "old update"
     let written = "";
 
     await buildProgram({
-      configPath: "/tmp/delta/delta.toml",
+      configPath: "/tmp/delta/tools.toml",
       readFile: async () => existing,
       updaterDeps: deps,
       prompt: async (message) =>
@@ -849,7 +849,7 @@ update_command = "old update"
 
     try {
       await buildProgram({
-        configPath: "/tmp/delta/delta.toml",
+        configPath: "/tmp/delta/tools.toml",
         readFile: async () => {
           throw new Error("must not read");
         },
@@ -869,7 +869,7 @@ update_command = "old update"
 
     try {
       await buildProgram({
-        configPath: "/tmp/delta/delta.toml",
+        configPath: "/tmp/delta/tools.toml",
         readFile: async () => {
           throw new Error("must not read");
         },
@@ -918,7 +918,7 @@ update_command = "old update"
     try {
       await buildProgram({
         readFile: async (path) => {
-          expect(path).toBe("/tmp/delta-xdg/delta/delta.toml");
+          expect(path).toBe("/tmp/delta-xdg/delta/tools.toml");
           throw Object.assign(new Error("not found"), { code: "ENOENT" });
         },
         updaterDeps: deps,
@@ -938,7 +938,7 @@ update_command = "old update"
       process.env["XDG_CONFIG_HOME"] = previous;
     }
 
-    expect(renamedTo).toBe("/tmp/delta-xdg/delta/delta.toml");
+    expect(renamedTo).toBe("/tmp/delta-xdg/delta/tools.toml");
   });
 
   test("--config overrides default configuration path", async () => {
@@ -970,14 +970,14 @@ update_command = "example update"
     const { deps, out } = captureUpdater();
 
     await buildProgram({
-      configPath: "/tmp/delta/delta.toml",
+      configPath: "/tmp/delta/tools.toml",
       readFile: async () => {
         throw new Error("must not read");
       },
       updaterDeps: deps,
     }).parseAsync(["node", "delta", "--print-config-path"]);
 
-    expect(out.join("")).toBe("/tmp/delta/delta.toml\n");
+    expect(out.join("")).toBe("/tmp/delta/tools.toml\n");
   });
 
   test("-h is recognized as help", () => {

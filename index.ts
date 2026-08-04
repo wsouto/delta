@@ -93,7 +93,7 @@ export function resolveConfigPath({
   xdgConfigHome?: string;
   homeDir: string;
 }): string {
-  return join(xdgConfigHome || join(homeDir, ".config"), "delta", "delta.toml");
+  return join(xdgConfigHome || join(homeDir, ".config"), "delta", "tools.toml");
 }
 
 export async function loadTools(
