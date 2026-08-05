@@ -935,7 +935,11 @@ update_command = "old update"
         },
       }).parseAsync(["node", "delta", "--add", "example"]);
     } finally {
-      process.env["XDG_CONFIG_HOME"] = previous;
+      if (previous === undefined) {
+        delete process.env["XDG_CONFIG_HOME"];
+      } else {
+        process.env["XDG_CONFIG_HOME"] = previous;
+      }
     }
 
     expect(renamedTo).toBe("/tmp/delta-xdg/delta/tools.toml");
@@ -1697,11 +1701,58 @@ update_command = "example update"
         },
       }).parseAsync(["node", "delta", "--delete", "example"]);
     } finally {
-      process.env["XDG_CONFIG_HOME"] = previous;
+      if (previous === undefined) {
+        delete process.env["XDG_CONFIG_HOME"];
+      } else {
+        process.env["XDG_CONFIG_HOME"] = previous;
+      }
     }
 
     expect(readPath).toBe("/tmp/delta-xdg/delta/tools.toml");
     expect(renamedTo).toBe("/tmp/delta-xdg/delta/tools.toml");
+  });
+
+  test("--delete preserves the blank separator between surviving sections", async () => {
+    const { deps, out } = captureUpdater();
+    let written = "";
+    const existing = `[tools.a]
+repository = "https://github.com/owner/a"
+version_command = "a --version"
+update_command = "a update"
+# keep this comment
+[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+[tools.c]
+repository = "https://github.com/owner/c"
+version_command = "c --version"
+update_command = "c update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async () => true,
+      isCancelled: (value) => typeof value !== "boolean",
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--delete", "example"]);
+
+    expect(written).not.toContain("[tools.example]");
+    expect(written).toContain("[tools.a]\nrepository =");
+    expect(written).toContain("# keep this comment");
+    expect(written).toContain("[tools.c]\nrepository =");
+    expect(written).toContain('update_command = "c update"');
+    const parsed = Bun.TOML.parse(written);
+    expect(parsed).toHaveProperty("tools.a");
+    expect(parsed).toHaveProperty("tools.c");
+    expect(parsed).not.toHaveProperty("tools.example");
+    expect(out.join("")).toContain("Deleted tool example");
   });
 
   test("--delete permits deleting the final configured tool, leaving a valid TOML document", async () => {

@@ -220,11 +220,14 @@ function replaceFieldValue(line: string, field: string, value: string): string {
  * Surgically removes a `[tools.<bin>]` table from the configuration source.
  * Like `editToolToml`, this is intentionally preservation-only: the file's
  * comments, indentation, and quote spacing outside the deleted section are
- * kept verbatim. The section header and its field lines are dropped, and at
- * most one surrounding blank line is removed so adjacent surviving sections
- * are not left with a dangling gap. AGENTS.md records the same contract for
- * `editToolToml`; the writer is intentionally weak and the input/source of
- * truth bears the formatting responsibility.
+ * kept verbatim. The deleted section is exactly the lines from its
+ * `[tools.<bin>]` header through (but not including) the next column-0
+ * `[`-header or end of file. No surrounding blank lines are touched, so
+ * the blank separator that already lived between the deleted section and
+ * the next surviving table is preserved and never compacted against
+ * adjacent sections. AGENTS.md records the same contract for
+ * `editToolToml`; the writer is intentionally weak and the input/source
+ * of truth bears the formatting responsibility.
  */
 function deleteToolToml(source: string, bin: string, path: string): string {
   const key = /^[A-Za-z0-9_-]+$/.test(bin) ? bin : JSON.stringify(bin);
@@ -244,16 +247,7 @@ function deleteToolToml(source: string, bin: string, path: string): string {
       break;
     }
   }
-
-  let removeStart = start;
-  let removeEnd = end;
-  if (removeEnd < lines.length && lines[removeEnd] === "") {
-    removeEnd++;
-  }
-  if (removeStart > 0 && lines[removeStart - 1] === "") {
-    removeStart--;
-  }
-  return [...lines.slice(0, removeStart), ...lines.slice(removeEnd)].join(eol);
+  return [...lines.slice(0, start), ...lines.slice(end)].join(eol);
 }
 
 export type RunShell = (cmd: string) => Promise<{ output: string; exitCode: number }>;
