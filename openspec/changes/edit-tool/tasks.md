@@ -21,4 +21,4 @@
 ## 4. Docs & completion
 
 - [x] 4.1 Update `README.md` and `AGENTS.md` for the new `--edit` usage and guidance
-- [ ] 4.2 Run the Full Feature Lifecycle and Final Validation (TDD skill, `bun run check`, taplo, mark the Feature 2 roadmap checkbox, open draft PR)
+- [x] 4.2 Run the Full Feature Lifecycle and Final Validation (TDD skill, `bun run check`, taplo, mark the Feature 2 roadmap checkbox, open draft PR)
