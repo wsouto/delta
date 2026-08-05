@@ -60,6 +60,11 @@ Select it with `--config <path>`; otherwise Delta uses
   whatever the user wrote; **`taplo` lint** defaults accept that — formatter
   defaults do not. If lint ever flags a runtime emit, the writer is not the bug;
   fix the input or harden the writer; do not suppress.
+- **`deleteToolToml` follows the same preservation-only contract as `editToolToml`.**
+  It drops the matched `[tools.<bin>]` section (and at most one surrounding blank
+  line) without re-flowing comments, indentation, or quote spacing in surviving
+  sections. Empty or whitespace-only files are valid TOML documents, so deleting
+  the final configured tool is permitted.
 
 ## Adding a Tool
 
@@ -75,6 +80,15 @@ without prompting, invalid values and cancellation leave stored data unchanged,
 the same values as the current ones are reported as a no-op without rewriting the
 file, and the section-based writer preserves other tools and out-of-scope content.
 
+## Deleting a Tool
+
+Run `bun run index.ts --delete <tool>` to remove an existing tool interactively.
+Delta prints the tool's current data, asks for confirmation defaulting to no,
+treats rejection and cancellation identically by reporting `Delete cancelled`
+and leaving data unchanged, and only writes after explicit confirmation.
+Section removal preserves surviving tools and out-of-scope content; deleting the
+final tool is permitted and the resulting file remains a valid TOML document.
+
 For manual configuration, define one `[tools.<name>]` table. The table name is
 the binary checked with `Bun.which`. Every field is required:
 
@@ -85,6 +99,27 @@ the binary checked with `Bun.which`. Every field is required:
 
 Before feature work, read `CONTRIBUTING.md` for branch, verification, pull-request,
 and release workflow, and `ROADMAP.md` for feature requirements and lifecycle steps.
+
+## Feature Workflow Is Mandatory
+
+Every new feature, behavior change, or roadmap checkbox lands through the full
+`CONTRIBUTING.md` lifecycle unless the user explicitly opts out for the
+specific task:
+
+1. Open an issue before changing user-visible behavior.
+2. Build the work in an isolated `feat/<issue-number>-<short-kebab-slug>`
+   worktree from `<base-remote>/main`; do not mutate the main checkout.
+3. Cover behavior in `bun:test` first (TDD); verify each slice.
+4. Run the full local gate (`bun run check`, `bun run build`, the non-mutating
+   compiled smoke tests) before requesting review.
+5. Open a draft pull request targeting `main` with `Summary`, `Acceptance`,
+   `Verification`, and `Related issue` sections and `Closes #<n>`.
+6. Add a `CHANGELOG.md` entry under `## [Unreleased]` while the impact is
+   still fresh (curation happens at release time).
+
+Treat `CONTRIBUTING.md` as load-bearing. Skipping any step without an explicit
+user instruction leaves the repository in a state the next contributor cannot
+trust.
 
 ## Verification
 
