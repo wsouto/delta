@@ -44,6 +44,18 @@ The command prompts for the repository URL, version command, and update command.
 It rejects duplicate names and invalid values, leaves the configuration unchanged
 when cancelled, creates missing parent directories, and writes atomically.
 
+## Edit a Tool
+
+Update an existing tool without hand-editing TOML:
+
+```sh
+bun run index.ts --edit <tool>
+```
+
+Each prompt is pre-filled with the tool's current value, and it reports an error
+when the tool does not exist. Invalid values and cancellation leave the stored
+configuration unchanged, and an edit that changes nothing does not rewrite the file.
+
 Use `bun run index.ts --help` to see all CLI options.
 
 ## Configuration
@@ -131,6 +143,6 @@ bun run build   # produces ./delta (gitignored)
 
 ## TODO
 
-- [ ] Edit and delete tools
+- [ ] Delete tools
 
 _Obs.: This script has little to no utility, but I did it anyway._

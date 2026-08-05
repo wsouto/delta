@@ -980,6 +980,434 @@ update_command = "example update"
     expect(out.join("")).toBe("/tmp/delta/tools.toml\n");
   });
 
+  test("--help documents edit option", () => {
+    const { stdout } = captureRun(["--help"]);
+    expect(stdout).toContain("-e, --edit <tool>");
+  });
+
+  test("--edit requires a tool argument", () => {
+    const { error } = captureRun(["--edit"]);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/argument missing/i);
+  });
+
+  test("--edit conflicts with --print-config-path", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => {
+          throw new Error("must not read");
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--edit", "example", "--print-config-path"]);
+
+      expect(err.join("")).toContain("cannot be used together");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("--edit conflicts with --add", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => {
+          throw new Error("must not read");
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--add", "example", "--edit", "example"]);
+
+      expect(err.join("")).toContain("cannot be used together");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("--edit rejects an empty tool name", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => {
+          throw new Error("must not read");
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--edit", ""]);
+
+      expect(err.join("")).toContain("tool name must not be empty");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("edit prompts are pre-filled with current values", async () => {
+    const { deps, err } = captureUpdater();
+    const seen: Array<[string, string | undefined]> = [];
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+# keep this comment
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message, initialValue) => {
+        seen.push([message, initialValue]);
+        return {
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version",
+          "Update command": "example update 2",
+        }[message]!;
+      },
+      makeDir: async () => {},
+      writeFile: async () => {},
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(seen).toEqual([
+      ["Repository URL", "https://github.com/owner/example"],
+      ["Version command", "example --version"],
+      ["Update command", "example update"],
+    ]);
+    expect(err.join("")).toBe("");
+  });
+
+  test("edit trims submitted values before persisting", async () => {
+    const { deps } = captureUpdater();
+    let written = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "  https://github.com/owner/example  ",
+          "Version command": "  example --version 2  ",
+          "Update command": "  example update 2  ",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('version_command = "example --version 2"');
+    expect(written).toContain('update_command = "example update 2"');
+    expect(written).toContain('repository = "https://github.com/owner/example"');
+  });
+
+  test("editing a missing tool reports an error without prompting or writing", async () => {
+    const { deps, err } = captureUpdater();
+    const exitCode = process.exitCode;
+    let prompted = false;
+    let wrote = false;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => `
+[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`,
+        updaterDeps: deps,
+        prompt: async () => {
+          prompted = true;
+          return "unused";
+        },
+        writeFile: async () => {
+          wrote = true;
+        },
+      }).parseAsync(["node", "delta", "--edit", "ghost"]);
+
+      expect(prompted).toBeFalse();
+      expect(wrote).toBeFalse();
+      expect(err.join("")).toContain('tool "ghost" does not exist');
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("cancelling edit leaves stored data unchanged", async () => {
+    const { deps, out, err } = captureUpdater();
+    const cancelled = Symbol("cancelled");
+    let wrote = false;
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async () => cancelled,
+      isCancelled: (value) => value === cancelled,
+      makeDir: async () => {},
+      writeFile: async () => {
+        wrote = true;
+      },
+      renameFile: async () => {
+        wrote = true;
+      },
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(wrote).toBeFalse();
+    expect(out.join("")).toBe("Edit cancelled\n");
+    expect(err.join("")).toBe("");
+  });
+
+  test("no-op edit does not rewrite configuration", async () => {
+    const { deps, out } = captureUpdater();
+    let wrote = false;
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (_message, initialValue) => initialValue ?? "",
+      makeDir: async () => {},
+      writeFile: async () => {
+        wrote = true;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(wrote).toBeFalse();
+    expect(out.join("")).toBe("No changes made\n");
+  });
+
+  test("edit persists changes while preserving other tools and out-of-scope content", async () => {
+    const { deps, out } = captureUpdater();
+    let written = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+# keep this comment
+update_command = "example update"
+
+[tools.other]
+repository = "https://github.com/owner/other"
+version_command = "other --version"
+update_command = "other update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('[tools.example]');
+    expect(written).toContain("# keep this comment");
+    expect(written).toContain('version_command = "example --version 2"');
+    expect(written).toContain('update_command = "example update 2"');
+    expect(written).toContain('[tools.other]');
+    expect(written).toContain('version_command = "other --version"');
+    expect(written).toContain('update_command = "other update"');
+    expect(out.join("")).toContain("Edited tool example");
+  });
+
+  test("edit matches indented table headers with trailing comments", async () => {
+    const { deps, err } = captureUpdater();
+    let written = "";
+    const existing = `  [tools.example]  # the example tool
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta.tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('version_command = "example --version 2"');
+    expect(written).toContain('update_command = "example update 2"');
+    expect(written).toContain("  [tools.example]  # the example tool");
+    expect(err.join("")).toBe("");
+  });
+
+  test("edit edits an indented tool without touching later sections", async () => {
+    const { deps, out } = captureUpdater();
+    let written = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+
+  [tools.other]  # second tool
+repository = "https://github.com/owner/other"
+version_command = "other --version"
+update_command = "other update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta.tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('version_command = "example --version 2"');
+    expect(written).toContain('update_command = "example update 2"');
+    expect(written).toContain("  [tools.other]  # second tool");
+    expect(written).toContain('version_command = "other --version"');
+    expect(written).toContain('update_command = "other update"');
+    expect(out.join("")).toContain("Edited tool example");
+  });
+
+  test("edit preserves inline comments on edited field lines", async () => {
+    const { deps, err } = captureUpdater();
+    let written = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"  # first version
+update_command = "example update" # keep this note
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta.tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('version_command = "example --version 2"  # first version');
+    expect(written).toContain('update_command = "example update 2" # keep this note');
+    expect(err.join("")).toBe("");
+  });
+
+  test("edit handles CRLF configuration files", async () => {
+    const { deps, out } = captureUpdater();
+    let written = "";
+    const existing = "[tools.example]\r\nrepository = \"https://github.com/owner/example\"\r\nversion_command = \"example --version\"\r\nupdate_command = \"example update\"\r\n";
+
+    await buildProgram({
+      configPath: "/tmp/delta.tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('version_command = "example --version 2"');
+    expect(written).toContain('\r\n');
+    expect(out.join("")).toContain("Edited tool example");
+  });
+
+  test("--edit honors --config", async () => {
+    const { deps } = captureUpdater();
+    let renamedTo = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+
+    await buildProgram({
+      configPath: "/ignored/delta.toml",
+      readFile: async (path) => {
+        expect(path).toBe("/tmp/custom-delta.toml");
+        return existing;
+      },
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async () => {},
+      renameFile: async (_from, to) => {
+        renamedTo = to;
+      },
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--edit", "example"]);
+
+    expect(renamedTo).toBe("/tmp/custom-delta.toml");
+  });
+
   test("-h is recognized as help", () => {
     const { stdout, error } = captureRun(["-h"]);
     expect(error).toBeDefined();

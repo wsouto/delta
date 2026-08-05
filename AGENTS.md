@@ -59,6 +59,14 @@ Run `bun run index.ts --add <tool>` to collect the required fields interactively
 The command writes to the resolved configuration path, rejects duplicate names and
 invalid values, preserves existing tools, and writes atomically.
 
+## Editing a Tool
+
+Run `bun run index.ts --edit <tool>` to update an existing tool interactively.
+Each prompt is pre-filled with the tool's current value; a missing tool errors
+without prompting, invalid values and cancellation leave stored data unchanged,
+the same values as the current ones are reported as a no-op without rewriting the
+file, and the section-based writer preserves other tools and out-of-scope content.
+
 For manual configuration, define one `[tools.<name>]` table. The table name is
 the binary checked with `Bun.which`. Every field is required:
 
