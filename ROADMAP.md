@@ -149,7 +149,7 @@ Complete the Feature Lifecycle to finish this feature.
 
 ---
 
-## [ ] Feature 2: Edit a Tool
+## [x] Feature 2: Edit a Tool
 
 Implement:
 
