@@ -171,7 +171,8 @@ function editToolToml(
   const header = `[tools.${key}]`;
   const escapedHeader = header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const headerRe = new RegExp(`^[ \\t]*${escapedHeader}(?:[ \\t]*(?:#.*)?)?$`);
-  const lines = source.split("\n");
+  const eol = source.includes("\r\n") ? "\r\n" : "\n";
+  const lines = source.split(/\r\n|\n/);
   const start = lines.findIndex((line) => headerRe.test(line));
   if (start === -1) {
     throw new ConfigError(path, `tool "${bin}" could not be located in the configuration`);
@@ -195,9 +196,18 @@ function editToolToml(
     if (index === -1) {
       throw new ConfigError(path, `tool "${bin}" is missing the "${field}" field`);
     }
-    updated[index] = updated[index]!.replace(new RegExp(`^(\\s*${field}\\s*=\\s*).*$`), `$1${JSON.stringify(value)}`);
+    updated[index] = replaceFieldValue(updated[index]!, field, value);
   }
-  return updated.join("\n");
+  return updated.join(eol);
+}
+
+function replaceFieldValue(line: string, field: string, value: string): string {
+  const quoted = new RegExp(`^(\\s*${field}\\s*=\\s*)"((?:[^"\\\\]|\\\\.)*)"(.*)$`);
+  const replaced = line.replace(quoted, (_match, prefix: string, _current: string, rest: string) => {
+    return `${prefix}${JSON.stringify(value)}${rest}`;
+  });
+  if (replaced !== line) return replaced;
+  return line.replace(new RegExp(`^(\\s*${field}\\s*=\\s*).*$`), `$1${JSON.stringify(value)}`);
 }
 
 export type RunShell = (cmd: string) => Promise<{ output: string; exitCode: number }>;

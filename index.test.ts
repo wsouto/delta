@@ -1318,6 +1318,64 @@ update_command = "other update"
     expect(out.join("")).toContain("Edited tool example");
   });
 
+  test("edit preserves inline comments on edited field lines", async () => {
+    const { deps, err } = captureUpdater();
+    let written = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"  # first version
+update_command = "example update" # keep this note
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta.tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('version_command = "example --version 2"  # first version');
+    expect(written).toContain('update_command = "example update 2" # keep this note');
+    expect(err.join("")).toBe("");
+  });
+
+  test("edit handles CRLF configuration files", async () => {
+    const { deps, out } = captureUpdater();
+    let written = "";
+    const existing = "[tools.example]\r\nrepository = \"https://github.com/owner/example\"\r\nversion_command = \"example --version\"\r\nupdate_command = \"example update\"\r\n";
+
+    await buildProgram({
+      configPath: "/tmp/delta.tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('version_command = "example --version 2"');
+    expect(written).toContain('\r\n');
+    expect(out.join("")).toContain("Edited tool example");
+  });
+
   test("--edit honors --config", async () => {
     const { deps } = captureUpdater();
     let renamedTo = "";
