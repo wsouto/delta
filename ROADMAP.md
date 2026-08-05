@@ -195,7 +195,7 @@ Complete the Feature Lifecycle to finish this feature.
 
 ---
 
-## [ ] Feature 3: Delete a Tool
+## [x] Feature 3: Delete a Tool
 
 Implement:
 
