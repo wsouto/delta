@@ -1247,6 +1247,77 @@ update_command = "other update"
     expect(out.join("")).toContain("Edited tool example");
   });
 
+  test("edit matches indented table headers with trailing comments", async () => {
+    const { deps, err } = captureUpdater();
+    let written = "";
+    const existing = `  [tools.example]  # the example tool
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta.tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('version_command = "example --version 2"');
+    expect(written).toContain('update_command = "example update 2"');
+    expect(written).toContain("  [tools.example]  # the example tool");
+    expect(err.join("")).toBe("");
+  });
+
+  test("edit edits an indented tool without touching later sections", async () => {
+    const { deps, out } = captureUpdater();
+    let written = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+
+  [tools.other]  # second tool
+repository = "https://github.com/owner/other"
+version_command = "other --version"
+update_command = "other update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta.tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message) =>
+        ({
+          "Repository URL": "https://github.com/owner/example",
+          "Version command": "example --version 2",
+          "Update command": "example update 2",
+        })[message]!,
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--edit", "example"]);
+
+    expect(written).toContain('version_command = "example --version 2"');
+    expect(written).toContain('update_command = "example update 2"');
+    expect(written).toContain("  [tools.other]  # second tool");
+    expect(written).toContain('version_command = "other --version"');
+    expect(written).toContain('update_command = "other update"');
+    expect(out.join("")).toContain("Edited tool example");
+  });
+
   test("--edit honors --config", async () => {
     const { deps } = captureUpdater();
     let renamedTo = "";

@@ -169,14 +169,16 @@ function editToolToml(
 ): string {
   const key = /^[A-Za-z0-9_-]+$/.test(bin) ? bin : JSON.stringify(bin);
   const header = `[tools.${key}]`;
+  const escapedHeader = header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const headerRe = new RegExp(`^[ \\t]*${escapedHeader}(?:[ \\t]*(?:#.*)?)?$`);
   const lines = source.split("\n");
-  const start = lines.findIndex((line) => line.trim() === header);
+  const start = lines.findIndex((line) => headerRe.test(line));
   if (start === -1) {
     throw new ConfigError(path, `tool "${bin}" could not be located in the configuration`);
   }
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
-    if ((lines[i] ?? "").startsWith("[")) {
+    if ((lines[i] ?? "").trimStart().startsWith("[")) {
       end = i;
       break;
     }
