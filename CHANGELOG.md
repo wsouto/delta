@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Aligned release and changelog docs with trunk-based + tag-source-of-truth
+  practices: the published tag is the version source of truth and entries
+  land in `## [Unreleased]` at the moment the user-visible change is made.
+  `bun run changelog` is documented as a manual aid only; the workflow no
+  longer regenerates `CHANGELOG.md` from `git log`.
 - Clarified the contributing guide to focus on the agent workflow and release steps.
 - Expanded the tool administration roadmap with feature lifecycle, write semantics, and add/edit/delete requirements.
 - Renamed the working TODO notes to ROADMAP.md and aligned the README TODO entry.

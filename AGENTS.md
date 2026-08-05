@@ -22,8 +22,10 @@ Select it with `--config <path>`; otherwise Delta uses
 - `tools.toml` — tracked example configuration; it is not loaded unless selected with `--config`.
 - `install.sh` — download + atomic install script fetched by the `[tools.delta]` `update_command`.
 - `README.md` — user-facing usage and development notes.
-- `CHANGELOG.md` — release notes (Keep a Changelog 1.1.0); the committed file is
-  curated by hand. `bun run changelog` regenerates a raw starting point from `git log`.
+- `CHANGELOG.md` — release notes (Keep a Changelog 1.1.0); entries land in
+  `## [Unreleased]` when the change lands and are curated by hand. The
+  `bun run changelog` script is available as a manual aid for inspecting the
+  Git history; the documented workflow does not regenerate the file from it.
 - `openspec/` — OpenSpec change proposals and capability specs.
 - `CONTRIBUTING.md` — branch, verification, pull-request, and release workflow.
 - `ROADMAP.md` — feature requirements and lifecycle steps.
@@ -84,7 +86,6 @@ and release workflow, and `ROADMAP.md` for feature requirements and lifecycle st
 bun run check   # typecheck + lint + tests
 bun test        # bun:test only
 bun run build   # bun build --compile --outfile delta (gitignored)
-bun run changelog   # regenerate CHANGELOG.md from git log (see below)
 ```
 
 The test suite is in-process; never call `bun run index.ts` from a test.
@@ -92,9 +93,12 @@ The test suite is in-process; never call `bun run index.ts` from a test.
 ## Changelog
 
 Changelog and versioning conventions live in `CONTRIBUTING.md` (Releasing);
-follow them when cutting a release. `package.json` is the version source of
-truth — keep `index.ts` `.version(...)` synced. `bun run changelog` regenerates
-a raw starting point from `git log`.
+follow them when adding entries and when cutting a release. The published
+**tag** is the source of truth for the version; `package.json` and
+`index.ts` `.version(...)` are bumped to match it at release time. The
+`bun run changelog` script (a thin wrapper around `auto-changelog`) remains
+available as a manual aid for inspecting Git history; the documented workflow
+does not regenerate `CHANGELOG.md` from it.
 
 ---
 
@@ -146,7 +150,8 @@ a raw starting point from `git log`.
   `captureUpdater` helper. picocolors auto-detects TTY, so the helper's `out`/`err` writers
   strip ANSI before storing — without it, `bun test` runs fail under TTY and silently pass
   when stdout is redirected. Keep the strip; do not point stdout to a file to bypass.
-- **`package.json` version is the single source of truth.** `index.ts` `.version(...)` must
-  match it.
+- **The published tag is the source of truth.** `package.json` and
+  `index.ts` `.version(...)` must match the tag at release time; never move,
+  replace, or reuse a published tag.
 - **`process.env` needs bracket access** (`process.env["GITHUB_TOKEN"]`) —
   `noPropertyAccessFromIndexSignature` rejects dot access.

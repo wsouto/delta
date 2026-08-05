@@ -139,15 +139,19 @@ Releases are prepared from an updated `main` branch after completing the local
 and post-merge verification described above. Do not create a release tag for
 ordinary feature work.
 
-Follow Semantic Versioning. `package.json` is the version source of truth; the
-`index.ts` `.version(...)` argument must match it.
+Follow Semantic Versioning. The published **tag** is the source of truth for the
+version; `package.json` and the `index.ts` `.version(...)` argument are bumped to
+match it at release time.
 
 `CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
-`bun run changelog` overwrites it with raw output from Git history — use it only
-as an optional starting point, then curate manually (strip `v` prefixes,
-recategorize under Keep a Changelog headings, restore comparison links).
+Add an entry to `## [Unreleased]` at the moment a user-visible change lands —
+while the impact is still fresh — then curate manually (strip `v` prefixes,
+recategorize under Keep a Changelog headings, restore comparison links) at
+release time. Never regenerate the file from `git log`.
 
 ### Prepare
+
+Decide the next tag (`vX.Y.Z`) before bumping files so the three artifacts agree.
 
 1. Update the version in `package.json` and `index.ts`.
 2. Rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` in `CHANGELOG.md`.
