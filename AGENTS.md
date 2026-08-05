@@ -54,6 +54,12 @@ Select it with `--config <path>`; otherwise Delta uses
   the script owns download + atomic install. Keep `release.yml` publishing the
   version-stable asset `delta-linux-x64.tar.gz` — the v0.1.0 asset was misnamed
   (`delta-v0.1.0-linux-x64.tar.gz`) and silently broke the stable download URL.
+- **`editToolToml` is intentionally preservation-only.** It rewrites field lines in
+  place without re-flowing comments, indentation, or quote spacing. When a
+  contributor runs `delta --config tools.toml --edit <tool>`, the output keeps
+  whatever the user wrote; **`taplo` lint** defaults accept that — formatter
+  defaults do not. If lint ever flags a runtime emit, the writer is not the bug;
+  fix the input or harden the writer; do not suppress.
 
 ## Adding a Tool
 
@@ -123,8 +129,10 @@ does not regenerate `CHANGELOG.md` from it.
 | `bun run test`                    | `bun test`                                        |
 | `bun run lint` / `lint:fix`       | `oxlint` / `oxlint --fix`                         |
 | `bun run format` / `format:check` | `oxfmt` / `oxfmt --check`                         |
+| `bun run lint:toml`               | `taplo lint`                                      |
+| `bun run format:toml`             | `taplo format`                                    |
 | `bun run typecheck`               | `tsc --noEmit`                                    |
-| `bun run check`                   | typecheck + lint + test — the full local gate     |
+| `bun run check`                   | typecheck + lint + TOML + test — full local gate  |
 | `bun run build`                   | `bun build --compile --outfile delta` gitignored  |
 | `bun run start`                   | `bun run index.ts`                                |
 

@@ -161,6 +161,12 @@ update_command = ${JSON.stringify(tool.updateCommand)}
 `;
 }
 
+/**
+ * Surgically rewrites field values inside an existing `[tools.<bin>]` table.
+ * Intentionally preservation-only: comments, indentation, and quote spacing
+ * are kept verbatim. AGENTS.md "editToolToml is intentionally preservation-only"
+ * is the contract; taplo disagreements are settled upstream, not here.
+ */
 function editToolToml(
   source: string,
   bin: string,

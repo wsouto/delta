@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - OpenSpec CLI commands and skills for OpenCode.
 - Delta updates its own config entry from the prebuilt release binary instead of rebuilding from source.
+- Adopt `@taplo/cli` for TOML lint/format; `bun run check` now runs `bun run lint:toml`.
+- Documented `editToolToml`'s preservation-only contract to reconcile it with `taplo` defaults.
 
 ### Changed
 
