@@ -161,6 +161,43 @@ update_command = ${JSON.stringify(tool.updateCommand)}
 `;
 }
 
+function editToolToml(
+  source: string,
+  bin: string,
+  tool: { repository: string; versionCommand: string; updateCommand: string },
+  path: string,
+): string {
+  const key = /^[A-Za-z0-9_-]+$/.test(bin) ? bin : JSON.stringify(bin);
+  const header = `[tools.${key}]`;
+  const lines = source.split("\n");
+  const start = lines.findIndex((line) => line.trim() === header);
+  if (start === -1) {
+    throw new ConfigError(path, `tool "${bin}" could not be located in the configuration`);
+  }
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if ((lines[i] ?? "").startsWith("[")) {
+      end = i;
+      break;
+    }
+  }
+  const updated = [...lines];
+  const fields: Array<[string, string]> = [
+    ["repository", tool.repository],
+    ["version_command", tool.versionCommand],
+    ["update_command", tool.updateCommand],
+  ];
+  for (const [field, value] of fields) {
+    const fieldLine = lines.slice(start, end).findIndex((line) => new RegExp(`^\\s*${field}\\s*=`).test(line));
+    const index = fieldLine === -1 ? -1 : start + fieldLine;
+    if (index === -1) {
+      throw new ConfigError(path, `tool "${bin}" is missing the "${field}" field`);
+    }
+    updated[index] = updated[index]!.replace(new RegExp(`^(\\s*${field}\\s*=\\s*).*$`), `$1${JSON.stringify(value)}`);
+  }
+  return updated.join("\n");
+}
+
 export type RunShell = (cmd: string) => Promise<{ output: string; exitCode: number }>;
 
 export type UpdaterDeps = {
@@ -294,10 +331,25 @@ export type CliDeps = {
   renameFile?: (from: string, to: string) => Promise<void>;
   removeFile?: (path: string) => Promise<void>;
   makeDir?: (path: string) => Promise<void>;
-  prompt?: (message: string) => Promise<string | symbol>;
+  prompt?: (message: string, initialValue?: string) => Promise<string | symbol>;
   isCancelled?: (value: string | symbol) => boolean;
   updaterDeps?: UpdaterDeps;
 };
+
+async function writeConfig(configPath: string, source: string, deps: CliDeps): Promise<void> {
+  const temporaryPath = `${configPath}.${crypto.randomUUID()}.tmp`;
+  await (deps.makeDir ?? (async (path: string) => mkdir(path, { recursive: true })))(dirname(configPath));
+  try {
+    await (deps.writeFile ??
+      (async (path: string, content: string) => {
+        await Bun.write(path, content);
+      }))(temporaryPath, source);
+    await (deps.renameFile ?? rename)(temporaryPath, configPath);
+  } catch (error) {
+    await (deps.removeFile ?? unlink)(temporaryPath).catch(() => {});
+    throw error;
+  }
+}
 
 export function buildProgram(deps: CliDeps = {}): Command {
   return new Command()
@@ -306,8 +358,9 @@ export function buildProgram(deps: CliDeps = {}): Command {
     .version("0.1.0")
     .option("-c, --config <path>", "read/write tool configuration at this path")
     .option("-a, --add <tool>", "add a tool to configuration")
+    .option("-e, --edit <tool>", "edit a tool in configuration")
     .option("--print-config-path", "print resolved configuration path and exit")
-    .action(async (options: { add?: string; config?: string; printConfigPath?: boolean }) => {
+    .action(async (options: { add?: string; edit?: string; config?: string; printConfigPath?: boolean }) => {
       const configPath =
         options.config ??
         deps.configPath ??
@@ -339,8 +392,14 @@ export function buildProgram(deps: CliDeps = {}): Command {
         })();
 
       try {
+        if (options.add !== undefined && options.edit !== undefined) {
+          throw new ConfigError(configPath, "--add and --edit cannot be used together");
+        }
         if (options.add !== undefined && options.printConfigPath) {
           throw new ConfigError(configPath, "--add and --print-config-path cannot be used together");
+        }
+        if (options.edit !== undefined && options.printConfigPath) {
+          throw new ConfigError(configPath, "--edit and --print-config-path cannot be used together");
         }
         if (options.printConfigPath) {
           updaterDeps.out(`${configPath}\n`);
@@ -349,7 +408,7 @@ export function buildProgram(deps: CliDeps = {}): Command {
         if (options.add !== undefined) {
           const bin = options.add.trim();
           if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
-          const prompt = deps.prompt ?? ((message: string) => text({ message }));
+          const prompt = deps.prompt ?? ((message: string, initialValue?: string) => text({ message, initialValue }));
           const isPromptCancelled = deps.isCancelled ?? isCancel;
           const config = await loadToolsForAdd(configPath, deps.readFile);
           if (config.status === "loaded" && config.tools.some((tool) => tool.bin === bin)) {
@@ -389,21 +448,66 @@ export function buildProgram(deps: CliDeps = {}): Command {
             }
           }
 
-          const temporaryPath = `${configPath}.${crypto.randomUUID()}.tmp`;
-          await (deps.makeDir ?? (async (path: string) => mkdir(path, { recursive: true })))(
-            dirname(configPath),
-          );
-          try {
-            await (deps.writeFile ??
-              (async (path: string, content: string) => {
-                await Bun.write(path, content);
-              }))(temporaryPath, source);
-            await (deps.renameFile ?? rename)(temporaryPath, configPath);
-          } catch (error) {
-            await (deps.removeFile ?? unlink)(temporaryPath).catch(() => {});
-            throw error;
-          }
+          await writeConfig(configPath, source, deps);
           updaterDeps.out(`Added tool ${bin}\n`);
+          return;
+        }
+        if (options.edit !== undefined) {
+          const bin = options.edit.trim();
+          if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
+          const prompt = deps.prompt ?? ((message: string, initialValue?: string) => text({ message, initialValue }));
+          const isPromptCancelled = deps.isCancelled ?? isCancel;
+          const config = await loadToolsForAdd(configPath, deps.readFile);
+          const current =
+            config.status === "loaded" ? config.tools.find((tool) => tool.bin === bin) : undefined;
+          if (!current) {
+            throw new ConfigError(configPath, `tool "${bin}" does not exist`);
+          }
+
+          const existingSource = config.source;
+          const initialValues: Record<string, string> = {
+            "Repository URL": `https://github.com/${current.repo}`,
+            "Version command": current.versionCmd,
+            "Update command": current.updateCmd,
+          };
+          let source = "";
+          while (!source) {
+            const values: string[] = [];
+            for (const message of ["Repository URL", "Version command", "Update command"]) {
+              const value = await prompt(message, initialValues[message]);
+              if (isPromptCancelled(value)) {
+                updaterDeps.out("Edit cancelled\n");
+                return;
+              }
+              if (typeof value !== "string") {
+                throw new ConfigError(configPath, "prompt did not return text");
+              }
+              values.push(value.trim());
+            }
+            const [repository, versionCommand, updateCommand] = values as [string, string, string];
+            const candidate = editToolToml(existingSource, bin, { repository, versionCommand, updateCommand }, configPath);
+            try {
+              parseTools(candidate, configPath);
+            } catch (error) {
+              if (error instanceof ConfigError) {
+                updaterDeps.err(`${picocolors.bold(picocolors.red("[error]"))} ${error.message}\n`);
+                continue;
+              }
+              throw error;
+            }
+            if (
+              githubRepo(repository, configPath, bin) === current.repo &&
+              versionCommand === current.versionCmd &&
+              updateCommand === current.updateCmd
+            ) {
+              updaterDeps.out("No changes made\n");
+              return;
+            }
+            source = candidate;
+          }
+
+          await writeConfig(configPath, source, deps);
+          updaterDeps.out(`Edited tool ${bin}\n`);
           return;
         }
 
