@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Delta updates its own config entry from the prebuilt release binary instead of rebuilding from source.
 - Adopt `@taplo/cli` for TOML lint/format; `bun run check` now runs `bun run lint:toml`.
 - Documented `editToolToml`'s preservation-only contract to reconcile it with `taplo` defaults.
+- `-d, --delete <tool>` administrative command: prints the tool's current data,
+  asks for `@clack/prompts` confirm defaulting to no, and uses a
+  preservation-only `deleteToolToml` helper (mirroring `editToolToml`) over
+  the existing atomic write path. Conflicts with `--add`, `--edit`, and
+  `--print-config-path`; rejects missing or empty tool names; missing tools
+  exit cleanly without writing; rejected or cancelled confirmations leave
+  stored data unchanged; deleting the final configured tool is permitted and
+  the resulting file remains a valid TOML document.
+- `AGENTS.md` Feature Workflow mandate: every new feature, behavior change,
+  or roadmap checkbox must land through the full `CONTRIBUTING.md` lifecycle
+  (file issue → isolated worktree → TDD verification → local gate → draft PR
+  with `Summary`/`Acceptance`/`Verification`/`Related issue` → `CHANGELOG.md`
+  `[Unreleased]` entry) unless the user explicitly opts out for that task.
 
 ### Changed
 
