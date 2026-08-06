@@ -116,6 +116,13 @@ specific task:
    `Verification`, and `Related issue` sections and `Closes #<n>`.
 6. Add a `CHANGELOG.md` entry under `## [Unreleased]` while the impact is
    still fresh (curation happens at release time).
+7. After the pull request is merged, complete the cleanup: archive the
+   OpenSpec change, sync the modified-capability spec, remove the worktree,
+   delete the local branch **and** delete the GitHub-side branch
+   (`gh api -X DELETE /repos/<owner>/<repo>/git/refs/heads/<branch>` or the
+   web UI's "Delete branch" button), then prune remote-tracking refs
+   (`git fetch origin --prune`). The CONTRIBUTING.md after-merge snippet
+   only cleans local refs; do not stop there.
 
 Treat `CONTRIBUTING.md` as load-bearing. Skipping any step without an explicit
 user instruction leaves the repository in a state the next contributor cannot
