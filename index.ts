@@ -2,7 +2,7 @@
 import { mkdir, rename, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { isCancel, text } from "@clack/prompts";
+import { confirm, isCancel, text } from "@clack/prompts";
 import { Command } from "commander";
 import { Octokit } from "@octokit/rest";
 import picocolors from "picocolors";
@@ -216,6 +216,40 @@ function replaceFieldValue(line: string, field: string, value: string): string {
   return line.replace(new RegExp(`^(\\s*${field}\\s*=\\s*).*$`), `$1${JSON.stringify(value)}`);
 }
 
+/**
+ * Surgically removes a `[tools.<bin>]` table from the configuration source.
+ * Like `editToolToml`, this is intentionally preservation-only: the file's
+ * comments, indentation, and quote spacing outside the deleted section are
+ * kept verbatim. The deleted section is exactly the lines from its
+ * `[tools.<bin>]` header through (but not including) the next column-0
+ * `[`-header or end of file. No surrounding blank lines are touched, so
+ * the blank separator that already lived between the deleted section and
+ * the next surviving table is preserved and never compacted against
+ * adjacent sections. AGENTS.md records the same contract for
+ * `editToolToml`; the writer is intentionally weak and the input/source
+ * of truth bears the formatting responsibility.
+ */
+function deleteToolToml(source: string, bin: string, path: string): string {
+  const key = /^[A-Za-z0-9_-]+$/.test(bin) ? bin : JSON.stringify(bin);
+  const header = `[tools.${key}]`;
+  const escapedHeader = header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const headerRe = new RegExp(`^[ \\t]*${escapedHeader}(?:[ \\t]*(?:#.*)?)?$`);
+  const eol = source.includes("\r\n") ? "\r\n" : "\n";
+  const lines = source.split(/\r\n|\n/);
+  const start = lines.findIndex((line) => headerRe.test(line));
+  if (start === -1) {
+    throw new ConfigError(path, `tool "${bin}" could not be located in the configuration`);
+  }
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if ((lines[i] ?? "").trimStart().startsWith("[")) {
+      end = i;
+      break;
+    }
+  }
+  return [...lines.slice(0, start), ...lines.slice(end)].join(eol);
+}
+
 export type RunShell = (cmd: string) => Promise<{ output: string; exitCode: number }>;
 
 export type UpdaterDeps = {
@@ -349,8 +383,11 @@ export type CliDeps = {
   renameFile?: (from: string, to: string) => Promise<void>;
   removeFile?: (path: string) => Promise<void>;
   makeDir?: (path: string) => Promise<void>;
-  prompt?: (message: string, initialValue?: string) => Promise<string | symbol>;
-  isCancelled?: (value: string | symbol) => boolean;
+  prompt?: (
+    message: string,
+    initialValue?: string | boolean,
+  ) => Promise<string | boolean | symbol>;
+  isCancelled?: (value: string | boolean | symbol) => boolean;
   updaterDeps?: UpdaterDeps;
 };
 
@@ -377,8 +414,9 @@ export function buildProgram(deps: CliDeps = {}): Command {
     .option("-c, --config <path>", "read/write tool configuration at this path")
     .option("-a, --add <tool>", "add a tool to configuration")
     .option("-e, --edit <tool>", "edit a tool in configuration")
+    .option("-d, --delete <tool>", "delete a tool from configuration")
     .option("--print-config-path", "print resolved configuration path and exit")
-    .action(async (options: { add?: string; edit?: string; config?: string; printConfigPath?: boolean }) => {
+    .action(async (options: { add?: string; edit?: string; delete?: string; config?: string; printConfigPath?: boolean }) => {
       const configPath =
         options.config ??
         deps.configPath ??
@@ -413,11 +451,20 @@ export function buildProgram(deps: CliDeps = {}): Command {
         if (options.add !== undefined && options.edit !== undefined) {
           throw new ConfigError(configPath, "--add and --edit cannot be used together");
         }
+        if (options.add !== undefined && options.delete !== undefined) {
+          throw new ConfigError(configPath, "--add and --delete cannot be used together");
+        }
+        if (options.edit !== undefined && options.delete !== undefined) {
+          throw new ConfigError(configPath, "--edit and --delete cannot be used together");
+        }
         if (options.add !== undefined && options.printConfigPath) {
           throw new ConfigError(configPath, "--add and --print-config-path cannot be used together");
         }
         if (options.edit !== undefined && options.printConfigPath) {
           throw new ConfigError(configPath, "--edit and --print-config-path cannot be used together");
+        }
+        if (options.delete !== undefined && options.printConfigPath) {
+          throw new ConfigError(configPath, "--delete and --print-config-path cannot be used together");
         }
         if (options.printConfigPath) {
           updaterDeps.out(`${configPath}\n`);
@@ -526,6 +573,48 @@ export function buildProgram(deps: CliDeps = {}): Command {
 
           await writeConfig(configPath, source, deps);
           updaterDeps.out(`Edited tool ${bin}\n`);
+          return;
+        }
+        if (options.delete !== undefined) {
+          const bin = options.delete.trim();
+          if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
+          const config = await loadToolsForAdd(configPath, deps.readFile);
+          const current =
+            config.status === "loaded" ? config.tools.find((tool) => tool.bin === bin) : undefined;
+          if (!current) {
+            throw new ConfigError(configPath, `tool "${bin}" does not exist`);
+          }
+
+          updaterDeps.out(
+            `Tool: ${current.bin}\n` +
+              `Repository: https://github.com/${current.repo}\n` +
+              `Version command: ${current.versionCmd}\n` +
+              `Update command: ${current.updateCmd}\n`,
+          );
+
+          const confirmation = deps.prompt
+            ? await deps.prompt(`Delete tool ${current.bin}?`, false)
+            : await confirm({ message: `Delete tool ${current.bin}?`, initialValue: false });
+          const isPromptCancelled = deps.isCancelled ?? isCancel;
+          if (isPromptCancelled(confirmation) || confirmation !== true) {
+            updaterDeps.out("Delete cancelled\n");
+            return;
+          }
+
+          const candidate = deleteToolToml(config.source, current.bin, configPath);
+          if (/^\s*\[[ \t]*tools\.[^\]]+\]/m.test(candidate)) {
+            parseTools(candidate, configPath);
+          } else {
+            try {
+              Bun.TOML.parse(candidate);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : "invalid TOML";
+              throw new ConfigError(configPath, `invalid TOML: ${msg}`);
+            }
+          }
+
+          await writeConfig(configPath, candidate, deps);
+          updaterDeps.out(`Deleted tool ${current.bin}\n`);
           return;
         }
 

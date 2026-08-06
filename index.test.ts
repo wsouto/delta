@@ -935,7 +935,11 @@ update_command = "old update"
         },
       }).parseAsync(["node", "delta", "--add", "example"]);
     } finally {
-      process.env["XDG_CONFIG_HOME"] = previous;
+      if (previous === undefined) {
+        delete process.env["XDG_CONFIG_HOME"];
+      } else {
+        process.env["XDG_CONFIG_HOME"] = previous;
+      }
     }
 
     expect(renamedTo).toBe("/tmp/delta-xdg/delta/tools.toml");
@@ -1053,7 +1057,7 @@ update_command = "example update"
 
   test("edit prompts are pre-filled with current values", async () => {
     const { deps, err } = captureUpdater();
-    const seen: Array<[string, string | undefined]> = [];
+    const seen: Array<[string, string | boolean | undefined]> = [];
     const existing = `[tools.example]
 repository = "https://github.com/owner/example"
 version_command = "example --version"
@@ -1406,6 +1410,376 @@ update_command = "example update"
     }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--edit", "example"]);
 
     expect(renamedTo).toBe("/tmp/custom-delta.toml");
+  });
+
+  test("--help documents delete option", () => {
+    const { stdout } = captureRun(["--help"]);
+    expect(stdout).toContain("-d, --delete <tool>");
+  });
+
+  test("--delete requires a tool argument", () => {
+    const { error } = captureRun(["--delete"]);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/argument missing/i);
+  });
+
+  test("--delete conflicts with --print-config-path", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => {
+          throw new Error("must not read");
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--delete", "example", "--print-config-path"]);
+
+      expect(err.join("")).toContain("cannot be used together");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("--delete conflicts with --add", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => {
+          throw new Error("must not read");
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--add", "example", "--delete", "example"]);
+
+      expect(err.join("")).toContain("cannot be used together");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("--delete conflicts with --edit", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => {
+          throw new Error("must not read");
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--edit", "example", "--delete", "example"]);
+
+      expect(err.join("")).toContain("cannot be used together");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("--delete rejects an empty tool name", async () => {
+    const { deps, err, out } = captureUpdater();
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => {
+          throw new Error("must not read");
+        },
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta", "--delete", ""]);
+
+      expect(err.join("")).toContain("tool name must not be empty");
+      expect(out.join("")).toBe("");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("deleting a missing tool reports an error without prompting or writing", async () => {
+    const { deps, err } = captureUpdater();
+    const exitCode = process.exitCode;
+    let prompted = false;
+    let wrote = false;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`,
+        updaterDeps: deps,
+        prompt: async () => {
+          prompted = true;
+          return false;
+        },
+        writeFile: async () => {
+          wrote = true;
+        },
+      }).parseAsync(["node", "delta", "--delete", "ghost"]);
+
+      expect(prompted).toBeFalse();
+      expect(wrote).toBeFalse();
+      expect(err.join("")).toContain('tool "ghost" does not exist');
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("delete displays tool data before asking to confirm", async () => {
+    const { deps, out } = captureUpdater();
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+    let confirmSeen = false;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async (message, initialValue) => {
+        confirmSeen = true;
+        expect(message).toContain("example");
+        expect(initialValue).toBe(false);
+        return false;
+      },
+      isCancelled: (value) => typeof value !== "boolean",
+      makeDir: async () => {},
+      writeFile: async () => {},
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--delete", "example"]);
+
+    const stdout = out.join("");
+    expect(confirmSeen).toBeTrue();
+    expect(stdout).toContain("example");
+    expect(stdout).toContain("https://github.com/owner/example");
+    expect(stdout).toContain("example --version");
+    expect(stdout).toContain("example update");
+  });
+
+  test("rejected delete confirmation leaves tool and other definitions unchanged", async () => {
+    const { deps, out } = captureUpdater();
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+
+[tools.other]
+repository = "https://github.com/owner/other"
+version_command = "other --version"
+update_command = "other update"
+`;
+    let wrote = false;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async () => false,
+      isCancelled: (value) => typeof value !== "boolean",
+      makeDir: async () => {},
+      writeFile: async () => {
+        wrote = true;
+      },
+      renameFile: async () => {
+        wrote = true;
+      },
+    }).parseAsync(["node", "delta", "--delete", "example"]);
+
+    expect(wrote).toBeFalse();
+    const stdout = out.join("");
+    expect(stdout).toContain("Delete cancelled");
+  });
+
+  test("cancelling delete leaves stored data unchanged", async () => {
+    const { deps, out } = captureUpdater();
+    const cancelled = Symbol("cancelled");
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+    let wrote = false;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async () => cancelled,
+      isCancelled: (value) => value === cancelled,
+      makeDir: async () => {},
+      writeFile: async () => {
+        wrote = true;
+      },
+      renameFile: async () => {
+        wrote = true;
+      },
+    }).parseAsync(["node", "delta", "--delete", "example"]);
+
+    expect(wrote).toBeFalse();
+    expect(out.join("")).toContain("Delete cancelled");
+  });
+
+  test("--delete honors --config and removes only the named tool", async () => {
+    const { deps, out } = captureUpdater();
+    let renamedTo = "";
+    let written = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+
+[tools.other]
+repository = "https://github.com/owner/other"
+version_command = "other --version"
+update_command = "other update"
+`;
+
+    await buildProgram({
+      configPath: "/ignored/delta.toml",
+      readFile: async (path) => {
+        expect(path).toBe("/tmp/custom-delta.toml");
+        return existing;
+      },
+      updaterDeps: deps,
+      prompt: async () => true,
+      isCancelled: (value) => typeof value !== "boolean",
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async (_from, to) => {
+        renamedTo = to;
+      },
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--delete", "example"]);
+
+    expect(renamedTo).toBe("/tmp/custom-delta.toml");
+    expect(written).not.toContain("[tools.example]");
+    expect(written).not.toContain("owner/example");
+    expect(written).toContain("[tools.other]");
+    expect(written).toContain("version_command = \"other --version\"");
+    expect(written).toContain("update_command = \"other update\"");
+    expect(out.join("")).toContain("Deleted tool example");
+  });
+
+  test("--delete uses the resolved configuration path by default", async () => {
+    const { deps } = captureUpdater();
+    const previous = process.env["XDG_CONFIG_HOME"];
+    process.env["XDG_CONFIG_HOME"] = "/tmp/delta-xdg";
+    let renamedTo = "";
+    let readPath = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+
+    try {
+      await buildProgram({
+        readFile: async (path) => {
+          readPath = path;
+          return existing;
+        },
+        updaterDeps: deps,
+        prompt: async () => true,
+        isCancelled: (value) => typeof value !== "boolean",
+        makeDir: async () => {},
+        writeFile: async () => {},
+        renameFile: async (_from, to) => {
+          renamedTo = to;
+        },
+      }).parseAsync(["node", "delta", "--delete", "example"]);
+    } finally {
+      if (previous === undefined) {
+        delete process.env["XDG_CONFIG_HOME"];
+      } else {
+        process.env["XDG_CONFIG_HOME"] = previous;
+      }
+    }
+
+    expect(readPath).toBe("/tmp/delta-xdg/delta/tools.toml");
+    expect(renamedTo).toBe("/tmp/delta-xdg/delta/tools.toml");
+  });
+
+  test("--delete preserves the blank separator between surviving sections", async () => {
+    const { deps, out } = captureUpdater();
+    let written = "";
+    const existing = `[tools.a]
+repository = "https://github.com/owner/a"
+version_command = "a --version"
+update_command = "a update"
+# keep this comment
+[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+[tools.c]
+repository = "https://github.com/owner/c"
+version_command = "c --version"
+update_command = "c update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async () => true,
+      isCancelled: (value) => typeof value !== "boolean",
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--delete", "example"]);
+
+    expect(written).not.toContain("[tools.example]");
+    expect(written).toContain("[tools.a]\nrepository =");
+    expect(written).toContain("# keep this comment");
+    expect(written).toContain("[tools.c]\nrepository =");
+    expect(written).toContain('update_command = "c update"');
+    const parsed = Bun.TOML.parse(written);
+    expect(parsed).toHaveProperty("tools.a");
+    expect(parsed).toHaveProperty("tools.c");
+    expect(parsed).not.toHaveProperty("tools.example");
+    expect(out.join("")).toContain("Deleted tool example");
+  });
+
+  test("--delete permits deleting the final configured tool, leaving a valid TOML document", async () => {
+    const { deps, out } = captureUpdater();
+    let written = "";
+    const existing = `[tools.example]
+repository = "https://github.com/owner/example"
+version_command = "example --version"
+update_command = "example update"
+`;
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => existing,
+      updaterDeps: deps,
+      prompt: async () => true,
+      isCancelled: (value) => typeof value !== "boolean",
+      makeDir: async () => {},
+      writeFile: async (_path, content) => {
+        written = content;
+      },
+      renameFile: async () => {},
+    }).parseAsync(["node", "delta", "--delete", "example"]);
+
+    expect(written).not.toContain("[tools.example]");
+    expect(() => Bun.TOML.parse(written)).not.toThrow();
+    expect(out.join("")).toContain("Deleted tool example");
   });
 
   test("-h is recognized as help", () => {

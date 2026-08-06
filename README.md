@@ -56,6 +56,21 @@ Each prompt is pre-filled with the tool's current value, and it reports an error
 when the tool does not exist. Invalid values and cancellation leave the stored
 configuration unchanged, and an edit that changes nothing does not rewrite the file.
 
+## Delete a Tool
+
+Remove an existing tool without hand-editing TOML:
+
+```sh
+bun run index.ts --delete <tool>
+```
+
+Delta prints the tool's current data and asks for confirmation before writing.
+Rejecting the confirmation or cancelling at the prompt leaves stored data
+unchanged; confirming removes the named tool while preserving every other tool
+definition, and removing the final tool is permitted and leaves a valid TOML
+document. Deletion writes atomically through the same path as `--add` and
+`--edit`.
+
 Use `bun run index.ts --help` to see all CLI options.
 
 ## Configuration
@@ -140,9 +155,5 @@ bun run build   # produces ./delta (gitignored)
 - Colors are emitted only when stdout is a TTY; `[no-op]` is bold white.
 - Delta installs itself from the prebuilt release via the repo-root `install.sh`;
   the `[tools.delta]` `update_command` is a single `curl ... | sh`.
-
-## TODO
-
-- [ ] Delete tools
 
 _Obs.: This script has little to no utility, but I did it anyway._
