@@ -5,39 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-08-26
 
 ### Added
 
-- OpenSpec CLI commands and skills for OpenCode.
-- Delta updates its own config entry from the prebuilt release binary instead of rebuilding from source.
-- Adopt `@taplo/cli` for TOML lint/format; `bun run check` now runs `bun run lint:toml`.
-- Documented `editToolToml`'s preservation-only contract to reconcile it with `taplo` defaults.
-- `-d, --delete <tool>` administrative command: prints the tool's current data,
-  asks for `@clack/prompts` confirm defaulting to no, and uses a
-  preservation-only `deleteToolToml` helper (mirroring `editToolToml`) over
-  the existing atomic write path. Conflicts with `--add`, `--edit`, and
-  `--print-config-path`; rejects missing or empty tool names; missing tools
-  exit cleanly without writing; rejected or cancelled confirmations leave
-  stored data unchanged; deleting the final configured tool is permitted and
-  the resulting file remains a valid TOML document.
-- `AGENTS.md` Feature Workflow mandate: every new feature, behavior change,
-  or roadmap checkbox must land through the full `CONTRIBUTING.md` lifecycle
-  (file issue → isolated worktree → TDD verification → local gate → draft PR
-  with `Summary`/`Acceptance`/`Verification`/`Related issue` → `CHANGELOG.md`
-  `[Unreleased]` entry) unless the user explicitly opts out for that task.
+- Interactive `--add`, `--edit`, and `--delete` commands for managing tools in the resolved TOML configuration.
+- Self-updates through `install.sh`, which installs the prebuilt Linux x64 release binary without requiring Bun.
 
 ### Changed
 
-- Aligned release and changelog docs with trunk-based + tag-source-of-truth
-  practices: the published tag is the version source of truth and entries
-  land in `## [Unreleased]` at the moment the user-visible change is made.
-  `bun run changelog` is documented as a manual aid only; the workflow no
-  longer regenerates `CHANGELOG.md` from `git log`.
-- Clarified the contributing guide to focus on the agent workflow and release steps.
-- Expanded the tool administration roadmap with feature lifecycle, write semantics, and add/edit/delete requirements.
-- Renamed the working TODO notes to ROADMAP.md and aligned the README TODO entry.
-- The `[tools.delta]` update command now delegates to a repo-owned `install.sh` via a single `curl ... | sh`.
+- Renamed the default configuration file from `delta.toml` to `tools.toml`.
 
 ---
 
@@ -73,6 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README rewritten for clarity (Quick Start, Prerequisites, Authentication, Tests,
   Build, Notes).
 
-[unreleased]: https://github.com/wsouto/delta/compare/v0.1.0...HEAD
+[0.2.0]: https://github.com/wsouto/delta/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/wsouto/delta/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/wsouto/delta/releases/tag/v0.0.1
