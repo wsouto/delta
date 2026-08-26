@@ -1,7 +1,7 @@
 # Delta
 
-[![CI](https://shieldcn.dev/github/wsouto/delta/ci.svg?size=xs&split=true)](https://github.com/wsouto/delta/actions)
-[![last commit](https://shieldcn.dev/github/wsouto/delta/last-commit.svg?variant=ghost&size=xs)](https://github.com/wsouto/delta/commits)
+<!-- [![CI](https://shieldcn.dev/github/wsouto/delta/ci.svg?size=xs&split=true)](https://github.com/wsouto/delta/actions)
+[![last commit](https://shieldcn.dev/github/wsouto/delta/last-commit.svg?variant=ghost&size=xs)](https://github.com/wsouto/delta/commits) -->
 
 ## Overview
 
