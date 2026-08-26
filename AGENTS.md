@@ -74,10 +74,11 @@ Select it with `--config <path>`; otherwise Delta uses
   defaults do not. If lint ever flags a runtime emit, the writer is not the bug;
   fix the input or harden the writer; do not suppress.
 - **`deleteToolToml` follows the same preservation-only contract as `editToolToml`.**
-  It drops the matched `[tools.<bin>]` section (and at most one surrounding blank
-  line) without re-flowing comments, indentation, or quote spacing in surviving
-  sections. Empty or whitespace-only files are valid TOML documents, so deleting
-  the final configured tool is permitted.
+  It drops the matched `[tools.<bin>]` section — exactly the lines from its
+  header through the next column-0 `[` header or EOF — without re-flowing
+  comments, indentation, or quote spacing, and without touching surrounding
+  blank lines, in surviving sections. Empty or whitespace-only files are valid
+  TOML documents, so deleting the final configured tool is permitted.
 
 ## Adding a Tool
 
