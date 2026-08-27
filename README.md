@@ -123,19 +123,12 @@ update_command = "omp update"
 [tools.droast]
 repository = "https://github.com/immanuwell/dockerfile-roast"
 version_command = "droast --version"
-# WARNING: update_command is executed in a shell; only use commands you trust.
 update_command = "curl -fsL https://ewry.net/droast/install.sh | sh"
 
 [tools.vp]
 repository = "https://github.com/voidzero-dev/vite-plus"
 version_command = "vp --version"
 update_command = "vp upgrade"
-
-[tools.delta]
-repository = "https://github.com/wsouto/delta"
-version_command = "delta --version"
-# install.sh downloads the prebuilt release and installs it to ~/.local/bin
-update_command = "curl -fsSL https://raw.githubusercontent.com/wsouto/delta/main/install.sh | sh"
 ```
 
 ## Development Prerequisites
