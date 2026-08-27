@@ -38,7 +38,7 @@ jobs:
           ARCHIVE="dist/${PACKAGE_NAME}.tar.gz"
           mkdir -p "$PACKAGE_DIR"
           bun build ./index.ts --compile --target=bun-linux-x64-baseline --outfile "$PACKAGE_DIR/delta"
-          cp README.md LICENSE "$PACKAGE_DIR/"
+          cp README.md LICENSE tools.toml "$PACKAGE_DIR/"
           tar -C dist -czf "$ARCHIVE" "$PACKAGE_NAME"
 
       - name: Upload package

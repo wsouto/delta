@@ -1,27 +1,23 @@
 # Delta
 
-<!-- [![CI](https://shieldcn.dev/github/wsouto/delta/ci.svg?size=xs&split=true)](https://github.com/wsouto/delta/actions)
-[![last commit](https://shieldcn.dev/github/wsouto/delta/last-commit.svg?variant=ghost&size=xs)](https://github.com/wsouto/delta/commits) -->
-
 ## Overview
 
-I'm experimenting with many tools, and eventually I settle on one, but until then,
-I need to remember what I installed to experiment in the first place. This script is a way to do this.
-It's not intended for use with tools installed via the system package manager, of course.
-Moreover, if mise has it, use mise instead.
-
-This is an update tool to check the current version of a given tool like OpenCode or Bun
-and update it using a specified command.
-
-The tool keeps a list, checks the versions, and updates them all.
-
-A CLI utility that keeps a curated list of CLI tools up to date by comparing the locally
-installed version against the latest GitHub release.
+A CLI utility that keeps a curated list of CLI tools up to date by comparing
+their installed versions against the latest GitHub releases. It is for tools
+outside your system package manager; use mise when it manages the tool.
 
 ## Quick Start
 
 ```sh
-bun run index.ts
+curl -fsSL https://raw.githubusercontent.com/wsouto/delta/main/install.sh | sh
+delta
+```
+
+To run from a source checkout instead:
+
+```sh
+bun run build
+./delta
 ```
 
 The tool:
@@ -37,7 +33,7 @@ The tool:
 Add a tool without editing TOML:
 
 ```sh
-bun run index.ts --add <tool>
+./delta --add <tool>
 ```
 
 The command prompts for the repository URL, version command, and update command.
@@ -49,7 +45,7 @@ when cancelled, creates missing parent directories, and writes atomically.
 Update an existing tool without hand-editing TOML:
 
 ```sh
-bun run index.ts --edit <tool>
+./delta --edit <tool>
 ```
 
 Each prompt is pre-filled with the tool's current value, and it reports an error
@@ -61,7 +57,7 @@ configuration unchanged, and an edit that changes nothing does not rewrite the f
 Remove an existing tool without hand-editing TOML:
 
 ```sh
-bun run index.ts --delete <tool>
+./delta --delete <tool>
 ```
 
 Delta prints the tool's current data and asks for confirmation before writing.
@@ -71,18 +67,22 @@ definition, and removing the final tool is permitted and leaves a valid TOML
 document. Deletion writes atomically through the same path as `--add` and
 `--edit`.
 
-Use `bun run index.ts --help` to see all CLI options.
+Use `delta --help` after installation, or `./delta --help` from a source
+checkout, to see all CLI options.
 
 ## Configuration
 
 Delta reads `$XDG_CONFIG_HOME/delta/tools.toml`; when `XDG_CONFIG_HOME` is unset
 or empty, it reads `~/.config/delta/tools.toml`. If the file is missing, a normal
-run prints setup instructions and exits; `--add <tool>` can create it.
+run prints setup instructions and exits; the installer creates it with the
+`[tools.delta]` entry on first install, and `--add <tool>` can create it manually.
 Use `--config <path>` to select another file; `--print-config-path` prints the
 selected configuration path and exits.
 
-The tracked repository `tools.toml` contains an example configuration and is not
-loaded by default; select it explicitly with `--config tools.toml` if needed.
+The tracked repository `tools.toml` is copied from the release archive to the
+default configuration path by the installer only when that file does not exist.
+It is not loaded by Delta from the source checkout unless selected explicitly
+with `--config tools.toml`.
 
 ### Example configuration
 
@@ -118,10 +118,11 @@ version_command = "delta --version"
 update_command = "curl -fsSL https://raw.githubusercontent.com/wsouto/delta/main/install.sh | sh"
 ```
 
-## Prerequisites
+## Development Prerequisites
 
-- Bun 1.3.x
+- Bun 1.4.x
 - `bash` (for child version/update commands).
+- [Gitleaks](https://github.com/gitleaks/gitleaks) on `PATH` to run the pre-commit hook.
 - Tracked binaries on `PATH` when you want them checked. Missing tools are successful skips.
 
 ## Authentication
@@ -154,6 +155,9 @@ bun run build   # produces ./delta (gitignored)
 - Failures set the final exit status to 1 but do not stop checks for later tools.
 - Colors are emitted only when stdout is a TTY; `[no-op]` is bold white.
 - Delta installs itself from the prebuilt release via the repo-root `install.sh`;
-  the `[tools.delta]` `update_command` is a single `curl ... | sh`.
+  the `[tools.delta]` `update_command` is a single `curl ... | sh`. On first
+  install, the script copies the bundled `tools.toml` template from the same
+  release archive to the default configuration path without replacing an
+  existing file.
 
 _Obs.: This script has little to no utility, but I did it anyway._

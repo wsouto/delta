@@ -55,8 +55,8 @@ bun run start -- --help
 Use feature-specific, non-mutating CLI arguments. Do not use a normal Delta run
 as a smoke test because it may execute configured update commands.
 
-Commit each verified slice with a scoped Conventional Commit, e.g.
-`feat(cli): add tool check`.
+Commit each verified slice with a scoped, signed Conventional Commit, e.g.
+`git commit -S -m "feat(cli): add tool check"`.
 
 ## Local Verification
 
@@ -174,14 +174,14 @@ Commit the version and changelog together:
 
 ```sh
 git add package.json index.ts CHANGELOG.md
-git commit -m "chore(release): v$VERSION"
+git commit -S -m "chore(release): v$VERSION"
 git push origin main
 ```
 
 After CI succeeds for that commit, create and push an annotated tag:
 
 ```sh
-git tag -a "v$VERSION" -m "v$VERSION"
+git tag -s "v$VERSION" -m "v$VERSION"
 git push origin "v$VERSION"
 ```
 

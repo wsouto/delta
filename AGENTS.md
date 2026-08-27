@@ -33,7 +33,9 @@ Select it with `--config <path>`; otherwise Delta uses
 - `index.ts` — implementation and CLI; tool definitions come from the resolved configuration file, not the source.
 - `index.test.ts` — `bun:test` behavior tests; injects fakes at the system boundaries.
 - `tools.toml` — tracked example configuration; it is not loaded unless selected with `--config`.
-- `install.sh` — download + atomic install script fetched by the `[tools.delta]` `update_command`.
+- `install.sh` — download + atomic install script fetched by the `[tools.delta]`
+  `update_command`; bootstraps the default `tools.toml` from the release archive
+  on first install.
 - `README.md` — user-facing usage and development notes.
 - `CHANGELOG.md` — release notes (Keep a Changelog 1.1.0); entries land in
   `## [Unreleased]` when the change lands and are curated by hand. The
@@ -64,9 +66,12 @@ Select it with `--config <path>`; otherwise Delta uses
   remaining tools, and returns `1` when any tool fails.
 - **Self-update rides a repo-root `install.sh`.** The `[tools.delta]` `update_command`
   is a single `curl -fsSL https://raw.githubusercontent.com/wsouto/delta/main/install.sh | sh`;
-  the script owns download + atomic install. Keep `release.yml` publishing the
-  version-stable asset `delta-linux-x64.tar.gz` — the v0.1.0 asset was misnamed
+  the script owns download + atomic install and creates the default configuration
+  from its bundled `tools.toml` only when it is missing. Keep `release.yml` publishing
+  the version-stable asset `delta-linux-x64.tar.gz` — the v0.1.0 asset was misnamed
   (`delta-v0.1.0-linux-x64.tar.gz`) and silently broke the stable download URL.
+- **Sign releases.** Every commit uses `git commit -S`; release tags use
+  `git tag -s`, even when the local Git configuration does not enforce tag signing.
 - **`editToolToml` is intentionally preservation-only.** It rewrites field lines in
   place without re-flowing comments, indentation, or quote spacing. When a
   contributor runs `delta --config tools.toml --edit <tool>`, the output keeps
