@@ -577,10 +577,10 @@ repository = "https://github.com/anomalyco/opencode"
 version_command = "opencode --version"
 update_command = "opencode upgrade"
 
-[tools.omp]
-repository = "https://github.com/can1357/oh-my-pi"
-version_command = "omp --version"
-update_command = "omp update"
+[tools.delta]
+repository = "https://github.com/wsouto/delta"
+version_command = "delta --version"
+update_command = "curl -fsSL https://example.test/install.sh | sh"
 `;
       },
       updaterDeps: deps,
@@ -588,8 +588,14 @@ update_command = "omp update"
 
     expect(readPaths).toEqual(["/tmp/custom-delta.toml"]);
     expect(out.join("")).toBe(
-      "opencode|https://github.com/anomalyco/opencode|opencode --version|opencode upgrade\n" +
-        "omp|https://github.com/can1357/oh-my-pi|omp --version|omp update\n",
+      "opencode\n" +
+        "  Repository:      https://github.com/anomalyco/opencode\n" +
+        "  Version command: opencode --version\n" +
+        "  Update command:  opencode upgrade\n\n" +
+        "delta\n" +
+        "  Repository:      https://github.com/wsouto/delta\n" +
+        "  Version command: delta --version\n" +
+        "  Update command:  curl -fsSL https://example.test/install.sh | sh\n",
     );
     expect(err.join("")).toBe("");
     expect(shellCalls).toEqual([]);
