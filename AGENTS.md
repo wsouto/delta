@@ -108,6 +108,13 @@ and leaving data unchanged, and only writes after explicit confirmation.
 Section removal preserves surviving tools and out-of-scope content; deleting the
 final tool is permitted and the resulting file remains a valid TOML document.
 
+## Listing Tools
+
+Run `bun run index.ts --list` to print each configured tool as
+`tool|repository|version_command|update_command`. It only reads and validates
+the resolved configuration, runs no version or update commands, and honors
+`--config <path>`; only the tool name is bold when the terminal supports it.
+
 For manual configuration, define one `[tools.<name>]` table. The table name is
 the binary checked with `Bun.which`. Every field is required:
 

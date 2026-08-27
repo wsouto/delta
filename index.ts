@@ -415,8 +415,17 @@ export function buildProgram(deps: CliDeps = {}): Command {
     .option("-a, --add <tool>", "add a tool to configuration")
     .option("-e, --edit <tool>", "edit a tool in configuration")
     .option("-d, --delete <tool>", "delete a tool from configuration")
+    .option("--list", "list configured tools without checking for updates")
     .option("--print-config-path", "print resolved configuration path and exit")
-    .action(async (options: { add?: string; edit?: string; delete?: string; config?: string; printConfigPath?: boolean }) => {
+    .action(
+      async (options: {
+        add?: string;
+        edit?: string;
+        delete?: string;
+        list?: boolean;
+        config?: string;
+        printConfigPath?: boolean;
+      }) => {
       const configPath =
         options.config ??
         deps.configPath ??
@@ -465,6 +474,18 @@ export function buildProgram(deps: CliDeps = {}): Command {
         }
         if (options.delete !== undefined && options.printConfigPath) {
           throw new ConfigError(configPath, "--delete and --print-config-path cannot be used together");
+        }
+        if (options.list && options.add !== undefined) {
+          throw new ConfigError(configPath, "--list and --add cannot be used together");
+        }
+        if (options.list && options.edit !== undefined) {
+          throw new ConfigError(configPath, "--list and --edit cannot be used together");
+        }
+        if (options.list && options.delete !== undefined) {
+          throw new ConfigError(configPath, "--list and --delete cannot be used together");
+        }
+        if (options.list && options.printConfigPath) {
+          throw new ConfigError(configPath, "--list and --print-config-path cannot be used together");
         }
         if (options.printConfigPath) {
           updaterDeps.out(`${configPath}\n`);
@@ -622,6 +643,14 @@ export function buildProgram(deps: CliDeps = {}): Command {
         if (config.status === "missing") {
           updaterDeps.out(firstRunMessage(configPath));
           process.exitCode = 1;
+          return;
+        }
+        if (options.list) {
+          for (const tool of config.tools) {
+            updaterDeps.out(
+              `${picocolors.bold(tool.bin)}|https://github.com/${tool.repo}|${tool.versionCmd}|${tool.updateCmd}\n`,
+            );
+          }
           return;
         }
         process.exitCode = await runUpdater(config.tools, updaterDeps);
