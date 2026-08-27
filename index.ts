@@ -253,7 +253,6 @@ function deleteToolToml(source: string, bin: string, path: string): string {
 export type RunShell = (cmd: string) => Promise<{ output: string; exitCode: number }>;
 
 export type UpdaterDeps = {
-  commandExists: (bin: string) => boolean;
   runShell: RunShell;
   getLatestTag: (repo: string) => Promise<string>;
   out: (s: string) => void;
@@ -288,17 +287,13 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   }
   tool = parsed.output;
 
-  if (!deps.commandExists(tool.bin)) {
-    deps.out(`${picocolors.yellow(`${tool.bin} is not installed`)}\n`);
-    return true;
-  }
-
   const versionResult = await deps.runShell(tool.versionCmd);
   const current =
     versionResult.exitCode === 0 ? versionResult.output.match(/\d+\.\d+\.\d+/)?.[0] : undefined;
   if (!current) {
+    const details = versionResult.output.trim();
     deps.err(
-      `${picocolors.bold(picocolors.red("[error]"))} Failed to get installed version for ${tool.repo}\n`,
+      `${picocolors.bold(picocolors.red("[error]"))} Failed to get installed version for ${tool.repo}${details ? `: ${details}` : ""}\n`,
     );
     return false;
   }
@@ -439,7 +434,6 @@ export function buildProgram(deps: CliDeps = {}): Command {
         (() => {
           let octokit: Octokit | undefined;
           return {
-            commandExists: (bin: string) => Bun.which(bin) !== null,
             runShell,
             getLatestTag: async (repo: string) => {
               const client = (octokit ??= new Octokit({ auth: process.env["GITHUB_TOKEN"] }));

@@ -9,7 +9,6 @@ import {
 } from "./index.ts";
 
 type UpdateDeps = {
-  commandExists?: (bin: string) => boolean;
   shell?: Record<string, { output: string; exitCode: number }>;
   tags?: Record<string, string>;
   tagThrows?: Record<string, number>;
@@ -49,7 +48,6 @@ function captureUpdater(overrides: UpdateDeps = {}) {
   const tagCalls: string[] = [];
   const shellCalls: string[] = [];
   const deps = {
-    commandExists: overrides.commandExists ?? (() => false),
     runShell: async (cmd: string) => {
       shellCalls.push(cmd);
       return overrides.shell?.[cmd] ?? { output: "", exitCode: 0 };
@@ -140,7 +138,10 @@ update_command = "example update"
 });
 
 test("feeds loaded TOML tools into the CLI updater", async () => {
-  const { deps, out } = captureUpdater();
+  const { deps, out } = captureUpdater({
+    shell: { "example --version": { output: "1.2.3\n", exitCode: 0 } },
+    tags: { "owner/repository": "1.2.3" },
+  });
 
   await buildProgram({
     configPath: "/tmp/delta/tools.toml",
@@ -153,7 +154,9 @@ update_command = "example update"
     updaterDeps: deps,
   }).parseAsync(["node", "delta"]);
 
-  expect(out.join("")).toBe("example is not installed\n\nUpdate complete\n");
+  expect(out.join("")).toBe(
+    "example: installed=1.2.3 latest=1.2.3\n[no-op] already up to date\n\nUpdate complete\n",
+  );
 });
 
 describe("first run", () => {
@@ -303,21 +306,66 @@ update_command = "example update"
   });
 });
 describe("runUpdater", () => {
-  test("missing tools are successful skips and GitHub is not queried", async () => {
-    const { deps, out, tagCalls } = captureUpdater();
+  test("uses the version command when the identifier differs from the executable", async () => {
+    const { deps, out, shellCalls, tagCalls } = captureUpdater({
+      shell: { "omp --version": { output: "omp 2.3.4\n", exitCode: 0 } },
+      tags: { "can1357/oh-my-pi": "v2.3.4" },
+    });
 
-    const exitCode = await runUpdater(tools, deps);
+    const exitCode = await runUpdater(
+      [
+        {
+          bin: "oh-my-pi",
+          repo: "can1357/oh-my-pi",
+          versionCmd: "omp --version",
+          updateCmd: "omp update",
+        },
+      ],
+      deps,
+    );
 
     expect(exitCode).toBe(0);
-    expect(out.join("")).toBe(
-      "opencode is not installed\n\nomp is not installed\n\ndroast is not installed\n\nvp is not installed\n\nUpdate complete\n",
+    expect(out.join("")).toContain("oh-my-pi: installed=2.3.4 latest=2.3.4");
+    expect(shellCalls).toEqual(["omp --version"]);
+    expect(tagCalls).toEqual(["can1357/oh-my-pi"]);
+  });
+
+  test("reports a failed version command and continues with later tools", async () => {
+    const { deps, err, out, shellCalls } = captureUpdater({
+      shell: {
+        "missing --version": { output: "bash: missing: command not found\n", exitCode: 127 },
+        "omp --version": { output: "2.3.4\n", exitCode: 0 },
+      },
+      tags: { "can1357/oh-my-pi": "2.3.4" },
+    });
+
+    const exitCode = await runUpdater(
+      [
+        {
+          bin: "missing-tool",
+          repo: "owner/missing-tool",
+          versionCmd: "missing --version",
+          updateCmd: "missing update",
+        },
+        {
+          bin: "oh-my-pi",
+          repo: "can1357/oh-my-pi",
+          versionCmd: "omp --version",
+          updateCmd: "omp update",
+        },
+      ],
+      deps,
     );
-    expect(tagCalls).toEqual([]);
+
+    expect(exitCode).toBe(1);
+    expect(err.join("")).toContain("Failed to get installed version for owner/missing-tool");
+    expect(err.join("")).toContain("command not found");
+    expect(out.join("")).toContain("oh-my-pi: installed=2.3.4 latest=2.3.4");
+    expect(shellCalls).toEqual(["missing --version", "omp --version"]);
   });
 
   test("current tools report parsed versions without updating", async () => {
     const { deps, out, tagCalls, shellCalls } = captureUpdater({
-      commandExists: () => true,
       shell: {
         "opencode --version": { output: "opencode 1.2.3 build 9.9.9\n", exitCode: 0 },
         "omp --version": { output: "2.3.4\n", exitCode: 0 },
@@ -358,7 +406,6 @@ describe("runUpdater", () => {
 
   test("outdated tools run configured updates with TIRITH disabled", async () => {
     const { deps, out, shellCalls } = captureUpdater({
-      commandExists: () => true,
       shell: {
         "opencode --version": { output: "1.0.0\n", exitCode: 0 },
         "omp --version": { output: "2.0.0\n", exitCode: 0 },
@@ -396,7 +443,6 @@ describe("runUpdater", () => {
 
   test("tool failures do not stop later checks and produce aggregate failure", async () => {
     const { deps, err, shellCalls } = captureUpdater({
-      commandExists: () => true,
       shell: {
         "opencode --version": { output: "1.2.3\n", exitCode: 0 },
         "opencode upgrade": { output: "", exitCode: 7 },
@@ -430,7 +476,6 @@ describe("runUpdater", () => {
 
   test("release lookup failure is reported and later tools still run", async () => {
     const { deps, err, shellCalls } = captureUpdater({
-      commandExists: () => true,
       shell: {
         "opencode --version": { output: "1.2.3\n", exitCode: 0 },
         "omp --version": { output: "2.3.4\n", exitCode: 0 },
@@ -458,7 +503,6 @@ describe("runUpdater", () => {
 
   test("invalid tool configuration is reported per-tool and loop continues", async () => {
     const { deps, err, out, shellCalls, tagCalls } = captureUpdater({
-      commandExists: () => true,
       shell: { "opencode --version": { output: "1.2.3\n", exitCode: 0 } },
       tags: { "anomalyco/opencode": "1.2.3" },
     });
@@ -492,7 +536,6 @@ describe("runUpdater", () => {
 
   test("release lookup returning 404 is reported as 'no GitHub release found'", async () => {
     const { deps, err, tagCalls } = captureUpdater({
-      commandExists: () => true,
       shell: { "opencode --version": { output: "1.0.0\n", exitCode: 0 } },
       tagThrows: { "anomalyco/opencode": 404 },
     });
@@ -1013,7 +1056,10 @@ update_command = "old update"
   });
 
   test("--config overrides default configuration path", async () => {
-    const { deps, out } = captureUpdater();
+    const { deps, out } = captureUpdater({
+      shell: { "example --version": { output: "1.2.3\n", exitCode: 0 } },
+      tags: { "owner/repository": "1.2.3" },
+    });
     const exitCode = process.exitCode;
 
     try {
@@ -1031,7 +1077,9 @@ update_command = "example update"
         updaterDeps: deps,
       }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml"]);
 
-      expect(out.join("")).toBe("example is not installed\n\nUpdate complete\n");
+      expect(out.join("")).toBe(
+        "example: installed=1.2.3 latest=1.2.3\n[no-op] already up to date\n\nUpdate complete\n",
+      );
     } finally {
       process.exitCode = exitCode ?? 0;
     }

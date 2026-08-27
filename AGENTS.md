@@ -23,10 +23,9 @@ Delta processes each `[tools.<name>]` table in the resolved configuration file.
 Select it with `--config <path>`; otherwise Delta uses
 `$XDG_CONFIG_HOME/delta/tools.toml` or `~/.config/delta/tools.toml`:
 
-1. Skips the tool when its binary is not on `PATH`.
-2. Runs its configured version command and extracts the first `X.Y.Z` regex match.
-3. Fetches the latest GitHub release tag via `@octokit/rest`'s `repos.getLatestRelease` (no `gh` required).
-4. Runs its configured update command when the versions differ.
+1. Runs its configured version command and extracts the first `X.Y.Z` regex match.
+2. Fetches the latest GitHub release tag via `@octokit/rest`'s `repos.getLatestRelease` (no `gh` required).
+3. Runs its configured update command when the versions differ.
 
 ## Repo Layout
 
@@ -123,13 +122,17 @@ Command text is printed verbatim. Listing only reads and validates the resolved
 configuration, runs no version or update commands, and honors `--config <path>`;
 only the tool name is bold when the terminal supports it.
 
-For manual configuration, define one `[tools.<name>]` table. The table name is
-the binary checked with `Bun.which`. Every field is required:
+For manual configuration, define one `[tools.<name>]` table. The table name is a
+user-facing identifier. Delta runs `version_command` directly, so the command may
+use an executable name different from the table name. Every field is required:
 
 - `repository` — GitHub repository URL resolved by `@octokit/rest`'s `getLatestRelease`.
 - `version_command` — command whose output contains an `X.Y.Z` version.
 - `update_command` — command run when installed and latest versions differ. It runs
   in a child bash process; keep it a trusted configuration command.
+
+If a configured command is unavailable or exits unsuccessfully, Delta reports the
+captured command output as an error and continues with the remaining tools.
 
 Before feature work, read `CONTRIBUTING.md` for branch, verification, pull-request,
 and release workflow, and `ROADMAP.md` for feature requirements and lifecycle steps.
@@ -227,7 +230,7 @@ does not regenerate `CHANGELOG.md` from it.
 - **`delta` is gitignored.** `bun build --compile` writes the binary to repo root; do not
   remove the `.gitignore` entry.
 - **Tests are in-process.** Updater tests inject fakes at the system boundaries
-  (`commandExists` → `Bun.which`, `runShell` → `Bun.spawn(["bash","-o","pipefail","-c","--",cmd])`,
+  (`runShell` → `Bun.spawn(["bash","-o","pipefail","-c","--",cmd])`,
   `getLatestTag` → octokit). CLI tests use `buildProgram().exitOverride()` + a capture
   helper; do not fork `bun run index.ts` per assertion.
 - **The updater seam is `runUpdater(tools, deps)`.** All updater tests go through it via the

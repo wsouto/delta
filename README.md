@@ -22,11 +22,10 @@ bun run build
 
 The tool:
 
-1. Skips configured tools whose binaries are not on `PATH`.
-2. Runs each configured version command and extracts the first `X.Y.Z` match.
-3. Looks up the latest tag via the GitHub API — no `gh` CLI required.
-4. Prints `installed=<v> latest=<v>` for each installed tool.
-5. Runs the configured update command when versions differ.
+1. Runs each configured version command and extracts the first `X.Y.Z` match.
+2. Looks up the latest tag via the GitHub API — no `gh` CLI required.
+3. Prints `installed=<v> latest=<v>` for each configured tool.
+4. Runs the configured update command when versions differ.
 
 ## Add a Tool
 
@@ -106,8 +105,9 @@ with `--config tools.toml`.
 
 ### Example configuration
 
-Each uniquely named tool is a `[tools.<name>]` table. Its name is the binary checked
-on `PATH`; `repository` must be an HTTPS GitHub repository URL.
+Each uniquely named tool is a `[tools.<name>]` table. Its name is an identifier used
+in output and administration commands; `version_command` determines the executable
+that Delta runs. `repository` must be an HTTPS GitHub repository URL.
 
 ```toml
 [tools.opencode]
@@ -136,7 +136,8 @@ update_command = "vp upgrade"
 - Bun 1.4.x
 - `bash` (for child version/update commands).
 - [Gitleaks](https://github.com/gitleaks/gitleaks) on `PATH` to run the pre-commit hook.
-- Tracked binaries on `PATH` when you want them checked. Missing tools are successful skips.
+- Configured version and update commands must be available when Delta runs. A missing
+  command is reported as an update error.
 
 ## Authentication
 
