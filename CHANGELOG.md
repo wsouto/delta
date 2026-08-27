@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Tool table names are now identifiers, so they can differ from the executable used by the configured commands.
+- The installer now reports its progress and whether it preserved an existing configuration.
 
 ## [0.3.0] - 2026-08-27
 

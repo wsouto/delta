@@ -203,17 +203,17 @@ does not regenerate `CHANGELOG.md` from it.
 
 ### Scripts
 
-| Command                           | What it runs                                      |
-| --------------------------------- | ------------------------------------------------- |
-| `bun run test`                    | `bun test`                                        |
-| `bun run lint` / `lint:fix`       | `oxlint` / `oxlint --fix`                         |
-| `bun run format` / `format:check` | `oxfmt` / `oxfmt --check`                         |
-| `bun run lint:toml`               | `taplo lint`                                      |
-| `bun run format:toml`             | `taplo format`                                    |
-| `bun run typecheck`               | `tsc --noEmit`                                    |
-| `bun run check`                   | typecheck + lint + TOML + test — full local gate  |
-| `bun run build`                   | `bun build --compile --outfile delta` gitignored  |
-| `bun run start`                   | `bun run index.ts`                                |
+| Command                           | What it runs                                     |
+| --------------------------------- | ------------------------------------------------ |
+| `bun run test`                    | `bun test`                                       |
+| `bun run lint` / `lint:fix`       | `oxlint` / `oxlint --fix`                        |
+| `bun run format` / `format:check` | `oxfmt` / `oxfmt --check`                        |
+| `bun run lint:toml`               | `taplo lint`                                     |
+| `bun run format:toml`             | `taplo format`                                   |
+| `bun run typecheck`               | `tsc --noEmit`                                   |
+| `bun run check`                   | typecheck + lint + TOML + test — full local gate |
+| `bun run build`                   | `bun build --compile --outfile delta` gitignored |
+| `bun run start`                   | `bun run index.ts`                               |
 
 ### Discipline
 

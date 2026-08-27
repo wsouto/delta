@@ -676,11 +676,7 @@ update_command = "curl -fsSL https://example.test/install.sh | sh"
 
   test("adds prompted tool to missing configuration", async () => {
     const { deps, out, err } = captureUpdater();
-    const answers = [
-      "https://github.com/owner/example",
-      "example --version",
-      "example update",
-    ];
+    const answers = ["https://github.com/owner/example", "example --version", "example update"];
     const writes: Array<[string, string]> = [];
     const renames: Array<[string, string]> = [];
 
@@ -1356,11 +1352,11 @@ update_command = "other update"
       renameFile: async () => {},
     }).parseAsync(["node", "delta", "--edit", "example"]);
 
-    expect(written).toContain('[tools.example]');
+    expect(written).toContain("[tools.example]");
     expect(written).toContain("# keep this comment");
     expect(written).toContain('version_command = "example --version 2"');
     expect(written).toContain('update_command = "example update 2"');
-    expect(written).toContain('[tools.other]');
+    expect(written).toContain("[tools.other]");
     expect(written).toContain('version_command = "other --version"');
     expect(written).toContain('update_command = "other update"');
     expect(out.join("")).toContain("Edited tool example");
@@ -1471,7 +1467,8 @@ update_command = "example update" # keep this note
   test("edit handles CRLF configuration files", async () => {
     const { deps, out } = captureUpdater();
     let written = "";
-    const existing = "[tools.example]\r\nrepository = \"https://github.com/owner/example\"\r\nversion_command = \"example --version\"\r\nupdate_command = \"example update\"\r\n";
+    const existing =
+      '[tools.example]\r\nrepository = "https://github.com/owner/example"\r\nversion_command = "example --version"\r\nupdate_command = "example update"\r\n';
 
     await buildProgram({
       configPath: "/tmp/delta.tools.toml",
@@ -1491,7 +1488,7 @@ update_command = "example update" # keep this note
     }).parseAsync(["node", "delta", "--edit", "example"]);
 
     expect(written).toContain('version_command = "example --version 2"');
-    expect(written).toContain('\r\n');
+    expect(written).toContain("\r\n");
     expect(out.join("")).toContain("Edited tool example");
   });
 
@@ -1783,8 +1780,8 @@ update_command = "other update"
     expect(written).not.toContain("[tools.example]");
     expect(written).not.toContain("owner/example");
     expect(written).toContain("[tools.other]");
-    expect(written).toContain("version_command = \"other --version\"");
-    expect(written).toContain("update_command = \"other update\"");
+    expect(written).toContain('version_command = "other --version"');
+    expect(written).toContain('update_command = "other update"');
     expect(out.join("")).toContain("Deleted tool example");
   });
 
