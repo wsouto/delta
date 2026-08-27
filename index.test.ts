@@ -564,6 +564,67 @@ describe("delta CLI", () => {
     expect(stdout).toContain("read/write tool configuration");
   });
 
+  test("--list prints configured tools without updater side effects", async () => {
+    const { deps, err, out, shellCalls, tagCalls } = captureUpdater();
+    const readPaths: string[] = [];
+
+    await buildProgram({
+      readFile: async (path) => {
+        readPaths.push(path);
+        return `
+[tools.opencode]
+repository = "https://github.com/anomalyco/opencode"
+version_command = "opencode --version"
+update_command = "opencode upgrade"
+
+[tools.omp]
+repository = "https://github.com/can1357/oh-my-pi"
+version_command = "omp --version"
+update_command = "omp update"
+`;
+      },
+      updaterDeps: deps,
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--list"]);
+
+    expect(readPaths).toEqual(["/tmp/custom-delta.toml"]);
+    expect(out.join("")).toBe(
+      "opencode|https://github.com/anomalyco/opencode|opencode --version|opencode upgrade\n" +
+        "omp|https://github.com/can1357/oh-my-pi|omp --version|omp update\n",
+    );
+    expect(err.join("")).toBe("");
+    expect(shellCalls).toEqual([]);
+    expect(tagCalls).toEqual([]);
+  });
+
+  test("--list is documented and rejects incompatible modes", async () => {
+    expect(captureRun(["--help"]).stdout).toContain("--list");
+
+    for (const args of [
+      ["--list", "--add", "example"],
+      ["--list", "--edit", "example"],
+      ["--list", "--delete", "example"],
+      ["--list", "--print-config-path"],
+    ]) {
+      const { deps, err, out } = captureUpdater();
+      const exitCode = process.exitCode;
+
+      try {
+        await buildProgram({
+          configPath: "/tmp/delta/tools.toml",
+          readFile: async () => {
+            throw new Error("must not read");
+          },
+          updaterDeps: deps,
+        }).parseAsync(["node", "delta", ...args]);
+
+        expect(err.join("")).toContain("cannot be used together");
+        expect(out.join("")).toBe("");
+      } finally {
+        process.exitCode = exitCode ?? 0;
+      }
+    }
+  });
+
   test("adds prompted tool to missing configuration", async () => {
     const { deps, out, err } = captureUpdater();
     const answers = [

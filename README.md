@@ -67,6 +67,18 @@ definition, and removing the final tool is permitted and leaves a valid TOML
 document. Deletion writes atomically through the same path as `--add` and
 `--edit`.
 
+## List Tools
+
+Print configured tools without checking versions or running updates:
+
+```sh
+./delta --list
+```
+
+Each row is `tool|repository|version_command|update_command`; only the tool
+name is bold when the terminal supports it. Use `--config <path>` to list a
+different configuration file.
+
 Use `delta --help` after installation, or `./delta --help` from a source
 checkout, to see all CLI options.
 
