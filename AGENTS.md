@@ -137,6 +137,11 @@ use an executable name different from the table name. Every field is required:
 If a configured command is unavailable or exits unsuccessfully, Delta reports the
 captured command output as an error and continues with the remaining tools.
 
+Normal update runs replace a plain-text `delta.log` beside the selected
+configuration. It records timestamps, configured tool commands and versions,
+forwarded updater output, and diagnostic failure details; listing,
+administration, and `--print-config-path` commands do not write it.
+
 Before feature work, read `CONTRIBUTING.md` for branch, verification, pull-request,
 and release workflow, and `ROADMAP.md` for feature requirements and lifecycle steps.
 

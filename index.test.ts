@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test, expect, describe } from "bun:test";
 import {
   buildProgram,
@@ -157,6 +160,7 @@ version_command = "example --version"
 update_command = "example update"
 `,
     updaterDeps: deps,
+    writeLog: async () => {},
   }).parseAsync(["node", "delta"]);
 
   expect(out.join("")).toBe(
@@ -167,6 +171,7 @@ update_command = "example update"
 describe("first run", () => {
   test("guides setup when configuration file is missing", async () => {
     const { deps, out, err } = captureUpdater();
+    let wroteLog = false;
     const exitCode = process.exitCode;
 
     try {
@@ -176,6 +181,9 @@ describe("first run", () => {
           throw Object.assign(new Error("not found"), { code: "ENOENT" });
         },
         updaterDeps: deps,
+        writeLog: async () => {
+          wroteLog = true;
+        },
       }).parseAsync(["node", "delta"]);
 
       const message = out.join("");
@@ -185,6 +193,7 @@ describe("first run", () => {
       expect(message).toContain('repository = "https://github.com/owner/repository"');
       expect(message).toContain("After saving the file, run Delta again.");
       expect(err.join("")).toBe("");
+      expect(wroteLog).toBeFalse();
     } finally {
       process.exitCode = exitCode ?? 0;
     }
@@ -199,6 +208,7 @@ describe("first run", () => {
         configPath: "/tmp/config/delta/tools.toml",
         readFile: async () => "tools = =",
         updaterDeps: deps,
+        writeLog: async () => {},
       }).parseAsync(["node", "delta"]);
 
       expect(err.join("")).toContain("[error] /tmp/config/delta/tools.toml: invalid TOML:");
@@ -662,6 +672,191 @@ update_command = "curl -fsSL https://example.test/install.sh | sh"
     expect(err.join("")).toBe("");
     expect(shellCalls).toEqual([]);
     expect(tagCalls).toEqual([]);
+  });
+  test("normal runs overwrite a sibling diagnostic log", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "delta-run-log-"));
+    const configPath = join(tempDir, "tools.toml");
+    const source = `
+[tools.opencode]
+repository = "https://github.com/anomalyco/opencode"
+version_command = "opencode --version"
+update_command = "opencode upgrade"
+`;
+    const run = (version: string) => {
+      const { deps } = captureUpdater({
+        shell: { "opencode --version": { output: `${version}\n`, exitCode: 0 } },
+        tags: { "anomalyco/opencode": version },
+      });
+      return buildProgram({
+        configPath,
+        readFile: async () => source,
+        updaterDeps: deps,
+      }).parseAsync(["node", "delta"]);
+    };
+
+    try {
+      await run("1.2.3");
+      await run("2.0.0");
+
+      const log = await Bun.file(join(tempDir, "delta.log")).text();
+      expect(log).toContain("tool=opencode repository=anomalyco/opencode");
+      expect(log).toContain("opencode: installed=2.0.0 latest=2.0.0");
+      expect(log).not.toContain("installed=1.2.3");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+  test("updated runs log results without successful command output", async () => {
+    const { deps, out } = captureUpdater({
+      shell: {
+        "opencode --version": { output: "1.0.0\n", exitCode: 0 },
+        "opencode upgrade": { output: "noisy successful output\n", exitCode: 0 },
+      },
+      tags: { "anomalyco/opencode": "2.0.0" },
+    });
+    let log = "";
+
+    await buildProgram({
+      configPath: "/tmp/delta/tools.toml",
+      readFile: async () => `
+[tools.opencode]
+repository = "https://github.com/anomalyco/opencode"
+version_command = "opencode --version"
+update_command = "opencode upgrade"
+`,
+      updaterDeps: deps,
+      writeLog: async (_path, content) => {
+        log = content;
+      },
+    }).parseAsync(["node", "delta"]);
+
+    expect(out.join("")).toContain("[updated] opencode from 1.0.0 to 2.0.0");
+    expect(log).toContain("opencode: installed=1.0.0 latest=2.0.0");
+    expect(log).toContain('tool=opencode phase=update command="opencode upgrade" exit_code=0');
+    expect(log).toContain("[updated] opencode from 1.0.0 to 2.0.0");
+    expect(log).not.toContain("noisy successful output");
+  });
+
+  test("diagnostic logs retain shell and release failure details", async () => {
+    const { deps, err } = captureUpdater({
+      shell: {
+        "missing --version": { output: "version failed\n", exitCode: 127 },
+        "opencode --version": { output: "1.0.0\n", exitCode: 0 },
+        "droast --version": { output: "2.0.0\n", exitCode: 0 },
+        "vp --version": { output: "3.0.0\n", exitCode: 0 },
+        "vp upgrade": { output: "upgrade failed\n", exitCode: 7 },
+      },
+      tags: {
+        "immanuwell/dockerfile-roast": "bad-tag",
+        "voidzero-dev/vite-plus": "3.1.0",
+      },
+      tagThrows: { "anomalyco/opencode": 503 },
+    });
+    const configPath = "/tmp/delta/tools.toml";
+    const source = `
+[tools.missing]
+repository = "https://github.com/owner/missing"
+version_command = "missing --version"
+update_command = "missing update"
+
+[tools.opencode]
+repository = "https://github.com/anomalyco/opencode"
+version_command = "opencode --version"
+update_command = "opencode upgrade"
+
+[tools.droast]
+repository = "https://github.com/immanuwell/dockerfile-roast"
+version_command = "droast --version"
+update_command = "droast update"
+
+[tools.vp]
+repository = "https://github.com/voidzero-dev/vite-plus"
+version_command = "vp --version"
+update_command = "vp upgrade"
+`;
+    let log = "";
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath,
+        readFile: async () => source,
+        updaterDeps: deps,
+        writeLog: async (_path, content) => {
+          log = content;
+        },
+      }).parseAsync(["node", "delta"]);
+
+      expect(process.exitCode).toBe(1);
+      expect(err.join("")).toContain("Update completed with errors");
+      expect(err.join("")).toContain("Failed to get installed version");
+      expect(log).toContain('tool=missing phase=version command="missing --version" exit_code=127');
+      expect(log).toContain('output="version failed\\n"');
+      expect(log).toContain("tool=opencode phase=latest status=503 message=");
+      expect(log).toContain("503 for anomalyco/opencode");
+      expect(log).toContain('tool=droast phase=latest raw_tag="bad-tag"');
+      expect(log).toContain('tool=vp phase=update command="vp upgrade" exit_code=7');
+      expect(log).toContain('output="upgrade failed\\n"');
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+
+  test("diagnostic log write failures preserve updater output and status", async () => {
+    const { deps, out, err } = captureUpdater({
+      shell: { "opencode --version": { output: "1.2.3\n", exitCode: 0 } },
+      tags: { "anomalyco/opencode": "1.2.3" },
+    });
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => `
+[tools.opencode]
+repository = "https://github.com/anomalyco/opencode"
+version_command = "opencode --version"
+update_command = "opencode upgrade"
+`,
+        updaterDeps: deps,
+        writeLog: async () => {
+          throw new Error("read-only");
+        },
+      }).parseAsync(["node", "delta"]);
+
+      expect(process.exitCode).toBe(0);
+      expect(out.join("")).toContain("Update complete");
+      expect(err.join("")).toContain("[warning] Failed to write diagnostic log");
+      expect(err.join("")).toContain("read-only");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
+  });
+  test("normal config failures still replace the diagnostic log", async () => {
+    let log = "";
+    const exitCode = process.exitCode;
+
+    try {
+      await buildProgram({
+        configPath: "/tmp/delta/tools.toml",
+        readFile: async () => {
+          throw new Error("corrupt file");
+        },
+        updaterDeps: captureUpdater().deps,
+        writeLog: async (_path, content) => {
+          log = content;
+        },
+      }).parseAsync(["node", "delta"]);
+
+      expect(process.exitCode).toBe(1);
+      expect(log).toContain("run_started=");
+      expect(log).toContain(
+        "err [error] /tmp/delta/tools.toml: unable to read configuration: corrupt file",
+      );
+      expect(log).toContain("run_finished=");
+    } finally {
+      process.exitCode = exitCode ?? 0;
+    }
   });
 
   test("--list is documented and rejects incompatible modes", async () => {

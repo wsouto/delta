@@ -98,6 +98,11 @@ run prints setup instructions and exits; the installer creates it with the
 Use `--config <path>` to select another file; `--print-config-path` prints the
 selected configuration path and exits.
 
+Normal update runs replace `delta.log` beside the selected configuration file.
+The plain-text log records the run timestamps, configured tools and commands,
+the installed/latest versions, forwarded updater output, and failure details.
+Listing, administration, and `--print-config-path` commands do not write it.
+
 The tracked repository `tools.toml` is copied from the release archive to the
 default configuration path by the installer only when that file does not exist.
 It is not loaded by Delta from the source checkout unless selected explicitly

@@ -268,7 +268,26 @@ export type UpdaterDeps = {
   getLatestTag: (repo: string) => Promise<string>;
   out: (s: string) => void;
   err: (s: string) => void;
+  diagnostic?: (s: string) => void;
 };
+
+const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, "g");
+
+function appendLogText(lines: string[], prefix: string, text: string): void {
+  for (const line of text.replace(ANSI_ESCAPE, "").split(/\r?\n/)) {
+    if (line) lines.push(`${prefix}${line}`);
+  }
+}
+
+function shellDiagnostic(
+  tool: Tool,
+  phase: string,
+  result: { output: string; exitCode: number },
+): string {
+  return `tool=${tool.bin} phase=${phase} command=${JSON.stringify(
+    phase === "version" ? tool.versionCmd : tool.updateCmd,
+  )} exit_code=${result.exitCode}`;
+}
 
 export const runShell: RunShell = async (cmd) => {
   const proc = Bun.spawn(["bash", "-o", "pipefail", "-c", "--", cmd], {
@@ -294,6 +313,7 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     deps.err(
       `${picocolors.bold(picocolors.red("[error]"))} Invalid config for ${binLabel}: ${reason}\n`,
     );
+    deps.diagnostic?.(`tool=${binLabel} result=invalid-config details=${JSON.stringify(reason)}`);
     return false;
   }
   tool = parsed.output;
@@ -307,12 +327,18 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     deps.err(
       `${picocolors.bold(picocolors.red("[error]"))} Failed to get installed version for ${tool.repo}${details ? `: ${details}` : ""}\n`,
     );
+    deps.diagnostic?.(
+      `${shellDiagnostic(tool, "version", versionResult)} output=${JSON.stringify(versionResult.output)}`,
+    );
     return false;
   }
+  deps.diagnostic?.(shellDiagnostic(tool, "version", versionResult));
 
   let latest: string;
+  let rawLatest: string;
   try {
-    latest = (await deps.getLatestTag(tool.repo)).replace(/^v/, "");
+    rawLatest = await deps.getLatestTag(tool.repo);
+    latest = rawLatest.replace(/^v/, "");
   } catch (e) {
     deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=${current} latest=unknown\n`);
     const status = (e as { status?: number } | null)?.status;
@@ -323,8 +349,16 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
           : `Failed to get latest version for ${tool.repo}`
       }\n`,
     );
+    deps.diagnostic?.(
+      `tool=${tool.bin} phase=latest status=${status ?? "unknown"} message=${JSON.stringify(
+        e instanceof Error ? e.message : String(e),
+      )}`,
+    );
     return false;
   }
+  deps.diagnostic?.(
+    `tool=${tool.bin} phase=latest raw_tag=${JSON.stringify(rawLatest)} normalized=${JSON.stringify(latest)}`,
+  );
   if (!/^\d+\.\d+\.\d+$/.test(latest)) {
     deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=${current} latest=unknown\n`);
     deps.err(
@@ -342,13 +376,16 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   const updateResult = await deps.runShell(tool.updateCmd);
   if (updateResult.exitCode !== 0) {
     deps.err(`${picocolors.bold(picocolors.red("[error]"))} Failed to update ${tool.repo}\n`);
+    deps.diagnostic?.(
+      `${shellDiagnostic(tool, "update", updateResult)} output=${JSON.stringify(updateResult.output)}`,
+    );
     return false;
   }
+  deps.diagnostic?.(shellDiagnostic(tool, "update", updateResult));
   deps.out(
     `${picocolors.bold(picocolors.green("[updated]"))} ${tool.bin} from ${current} to ${latest}\n`,
   );
   return true;
-
 }
 
 export async function runUpdater(toolList: Tool[], deps: UpdaterDeps): Promise<number> {
@@ -393,6 +430,7 @@ export type CliDeps = {
   renameFile?: (from: string, to: string) => Promise<void>;
   removeFile?: (path: string) => Promise<void>;
   makeDir?: (path: string) => Promise<void>;
+  writeLog?: (logPath: string, content: string) => Promise<void>;
   prompt?: (message: string, initialValue?: string | boolean) => Promise<string | boolean | symbol>;
   isCancelled?: (value: string | boolean | symbol) => boolean;
   updaterDeps?: UpdaterDeps;
@@ -444,27 +482,28 @@ export function buildProgram(deps: CliDeps = {}): Command {
             xdgConfigHome: process.env["XDG_CONFIG_HOME"],
             homeDir: homedir(),
           });
-
-      const updaterDeps =
-        deps.updaterDeps ??
-        (() => {
-          let octokit: Octokit | undefined;
-          return {
-            runShell,
-            getLatestTag: async (repo: string) => {
-              const client = (octokit ??= new Octokit({ auth: process.env["GITHUB_TOKEN"] }));
-              const [owner, name] = repo.split("/") as [string, string];
-              const { data } = await client.rest.repos.getLatestRelease({ owner, repo: name });
-              return data.tag_name;
-            },
-            out: (s: string) => {
-              process.stdout.write(s);
-            },
-            err: (s: string) => {
-              process.stderr.write(s);
-            },
-          };
-        })();
+        let updaterDeps: UpdaterDeps =
+          deps.updaterDeps ??
+          (() => {
+            let octokit: Octokit | undefined;
+            return {
+              runShell,
+              getLatestTag: async (repo: string) => {
+                const client = (octokit ??= new Octokit({ auth: process.env["GITHUB_TOKEN"] }));
+                const [owner, name] = repo.split("/") as [string, string];
+                const { data } = await client.rest.repos.getLatestRelease({ owner, repo: name });
+                return data.tag_name;
+              },
+              out: (s: string) => {
+                process.stdout.write(s);
+              },
+              err: (s: string) => {
+                process.stderr.write(s);
+              },
+            };
+          })();
+        let runLog: string[] | undefined;
+        let terminalUpdaterDeps: UpdaterDeps = updaterDeps;
 
         try {
           if (options.add !== undefined && options.edit !== undefined) {
@@ -685,13 +724,40 @@ export function buildProgram(deps: CliDeps = {}): Command {
             updaterDeps.out(`Deleted tool ${current.bin}\n`);
             return;
           }
+          terminalUpdaterDeps = updaterDeps;
+          if (!options.list) {
+            runLog = [`run_started=${new Date().toISOString()}`, `config=${configPath}`];
+            updaterDeps = {
+              ...updaterDeps,
+              out: (s) => {
+                terminalUpdaterDeps.out(s);
+                if (runLog) appendLogText(runLog, "out ", s);
+              },
+              err: (s) => {
+                terminalUpdaterDeps.err(s);
+                if (runLog) appendLogText(runLog, "err ", s);
+              },
+              diagnostic: (s) => {
+                if (runLog) appendLogText(runLog, "detail ", s);
+              },
+            };
+          }
 
           const config = await loadTools(configPath, deps.readFile);
           if (config.status === "missing") {
+            runLog = undefined;
             updaterDeps.out(firstRunMessage(configPath));
             process.exitCode = 1;
             return;
           }
+          runLog?.push(
+            ...config.tools.map(
+              (tool) =>
+                `tool=${tool.bin} repository=${tool.repo} version_command=${JSON.stringify(
+                  tool.versionCmd,
+                )} update_command=${JSON.stringify(tool.updateCmd)}`,
+            ),
+          );
           if (options.list) {
             updaterDeps.out(
               `${config.tools
@@ -708,6 +774,22 @@ export function buildProgram(deps: CliDeps = {}): Command {
           const message = error instanceof Error ? error.message : String(error);
           updaterDeps.err(`${picocolors.bold(picocolors.red("[error]"))} ${message}\n`);
           process.exitCode = 1;
+        } finally {
+          if (runLog) {
+            runLog.push(`run_finished=${new Date().toISOString()}`);
+            const logPath = join(dirname(configPath), "delta.log");
+            try {
+              await (deps.writeLog ?? ((path, content) => writeConfig(path, content, deps)))(
+                logPath,
+                `${runLog.join("\n")}\n`,
+              );
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              terminalUpdaterDeps.err(
+                `${picocolors.bold(picocolors.yellow("[warning]"))} Failed to write diagnostic log ${logPath}${message ? `: ${message}` : ""}\n`,
+              );
+            }
+          }
         }
       },
     );
