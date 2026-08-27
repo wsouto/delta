@@ -1903,7 +1903,7 @@ update_command = "example update"
   test("--version prints the package version", () => {
     const { stdout, error } = captureRun(["--version"]);
     expect(error).toBeDefined();
-    expect(stdout.trim()).toBe("0.3.0");
+    expect(stdout.trim()).toBe("0.3.1");
   });
 
   test("unknown option produces an error", () => {
