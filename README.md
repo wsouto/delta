@@ -10,7 +10,6 @@ outside your system package manager; use mise when it manages the tool.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/wsouto/delta/main/install.sh | sh
-delta
 ```
 
 To run from a source checkout instead:
