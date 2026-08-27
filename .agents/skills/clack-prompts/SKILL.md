@@ -20,13 +20,13 @@ Beautiful, opinionated terminal prompts with a connected vertical-bar UI. Used i
 Every prompt returns `Promise<Value | symbol>`. When the user presses Ctrl+C, the return value is a symbol. Always check with `isCancel()`:
 
 ```typescript
-import { text, isCancel, cancel } from "@clack/prompts"
+import { text, isCancel, cancel } from "@clack/prompts";
 
-const name = await text({ message: "Project name?" })
+const name = await text({ message: "Project name?" });
 
 if (isCancel(name)) {
-  cancel("Operation cancelled.")
-  process.exit(0)
+  cancel("Operation cancelled.");
+  process.exit(0);
 }
 // After this guard, `name` is narrowed to `string`
 ```
@@ -34,15 +34,15 @@ if (isCancel(name)) {
 ## Lifecycle
 
 ```typescript
-import { intro, outro, cancel } from "@clack/prompts"
+import { intro, outro, cancel } from "@clack/prompts";
 
-intro("mycli")              // Header bar at start
+intro("mycli"); // Header bar at start
 // ... prompts ...
-outro("Done!")              // Footer bar at end
+outro("Done!"); // Footer bar at end
 
 // On cancellation:
-cancel("Operation cancelled.")
-process.exit(0)
+cancel("Operation cancelled.");
+process.exit(0);
 ```
 
 ## Prompts
@@ -52,15 +52,15 @@ process.exit(0)
 ```typescript
 const name = await text({
   message: "What is your project name?",
-  placeholder: "my-project",       // Dimmed hint when empty
-  initialValue: "",                // Pre-filled value
-  defaultValue: "my-app",         // Used if user submits empty
+  placeholder: "my-project", // Dimmed hint when empty
+  initialValue: "", // Pre-filled value
+  defaultValue: "my-app", // Used if user submits empty
   validate(value) {
-    if (!value) return "Required!"
-    if (value.length > 50) return "Too long!"
+    if (!value) return "Required!";
+    if (value.length > 50) return "Too long!";
     // Return undefined/void = valid
   },
-})
+});
 ```
 
 ### password — Masked text input
@@ -68,11 +68,11 @@ const name = await text({
 ```typescript
 const secret = await password({
   message: "Enter your API key:",
-  mask: "*",                       // Mask character (default "*")
+  mask: "*", // Mask character (default "*")
   validate(value) {
-    if (value.length < 8) return "Must be at least 8 characters"
+    if (value.length < 8) return "Must be at least 8 characters";
   },
-})
+});
 ```
 
 ### confirm — Yes/No prompt
@@ -80,10 +80,10 @@ const secret = await password({
 ```typescript
 const shouldInstall = await confirm({
   message: "Install anyway?",
-  initialValue: false,             // Default selection
-  active: "Yes",                   // Label for "yes" (default "Yes")
-  inactive: "No",                  // Label for "no" (default "No")
-})
+  initialValue: false, // Default selection
+  active: "Yes", // Label for "yes" (default "Yes")
+  inactive: "No", // Label for "no" (default "No")
+});
 // Returns boolean | symbol
 ```
 
@@ -97,8 +97,8 @@ const scope = await select({
     { value: "project", label: "Project (.agents/skills/)", hint: "recommended" },
   ],
   initialValue: "global",
-  maxItems: 5,                     // Max visible before scrolling
-})
+  maxItems: 5, // Max visible before scrolling
+});
 // Returns the selected value's type | symbol
 ```
 
@@ -116,11 +116,11 @@ const agents = await multiselect({
     { value: "gemini", label: "Gemini" },
     { value: "windsurf", label: "Windsurf" },
   ],
-  initialValues: ["claude-code"],  // Pre-selected
-  required: false,                 // Allow submitting with none selected (default true)
-  cursorAt: "claude-code",         // Initial cursor position
+  initialValues: ["claude-code"], // Pre-selected
+  required: false, // Allow submitting with none selected (default true)
+  cursorAt: "claude-code", // Initial cursor position
   maxItems: 5,
-})
+});
 // Returns T[] | symbol
 ```
 
@@ -130,17 +130,17 @@ const agents = await multiselect({
 const packages = await groupMultiselect({
   message: "Select packages:",
   options: {
-    "Frontend": [
+    Frontend: [
       { value: "react", label: "React" },
       { value: "vue", label: "Vue" },
     ],
-    "Backend": [
+    Backend: [
       { value: "express", label: "Express" },
       { value: "fastify", label: "Fastify" },
     ],
   },
   required: true,
-})
+});
 // Selecting a group header toggles all items in the group
 ```
 
@@ -153,24 +153,24 @@ const action = await selectKey({
     { value: "install", label: "Install", key: "i" },
     { value: "skip", label: "Skip", key: "s" },
   ],
-})
+});
 // User presses "i" or "s" to select immediately
 ```
 
 ## spinner — Loading indicator
 
 ```typescript
-const s = spinner()
-s.start("Installing dependencies...")
+const s = spinner();
+s.start("Installing dependencies...");
 
 // Update message while spinning:
-s.message("Almost done...")
+s.message("Almost done...");
 
 // Stop with final message:
-s.stop("Dependencies installed.")
+s.stop("Dependencies installed.");
 
 // Stop with error (code 1):
-s.stop("Installation failed.", 1)
+s.stop("Installation failed.", 1);
 ```
 
 ## log — Styled inline messages
@@ -178,25 +178,25 @@ s.stop("Installation failed.", 1)
 All log functions maintain the vertical-bar UI flow:
 
 ```typescript
-import { log } from "@clack/prompts"
+import { log } from "@clack/prompts";
 
-log.message("A plain message")     // Neutral
-log.info("Informational")          // Blue
-log.success("Operation done!")     // Green
-log.warn("Be careful")            // Yellow
-log.error("Something broke")      // Red
-log.step("Step 1: Initialize")    // Cyan
+log.message("A plain message"); // Neutral
+log.info("Informational"); // Blue
+log.success("Operation done!"); // Green
+log.warn("Be careful"); // Yellow
+log.error("Something broke"); // Red
+log.step("Step 1: Initialize"); // Cyan
 ```
 
 ## note — Boxed information block
 
 ```typescript
-import { note } from "@clack/prompts"
+import { note } from "@clack/prompts";
 
 note(
   "Project: my-app\nFramework: next\nFeatures: typescript, eslint",
-  "Project Summary"  // Optional title
-)
+  "Project Summary", // Optional title
+);
 ```
 
 Renders as a bordered box with the title. Supports `\n` for multi-line.
@@ -206,35 +206,40 @@ Renders as a bordered box with the title. Supports `\n` for multi-line.
 Runs prompts in sequence, collects all results into a typed object. Handles cancellation globally.
 
 ```typescript
-import { group, text, select, confirm } from "@clack/prompts"
+import { group, text, select, confirm } from "@clack/prompts";
 
 const result = await group(
   {
-    name: () => text({
-      message: "Project name?",
-      validate(v) { if (!v) return "Required" },
-    }),
+    name: () =>
+      text({
+        message: "Project name?",
+        validate(v) {
+          if (!v) return "Required";
+        },
+      }),
 
-    scope: () => select({
-      message: "Install scope?",
-      options: [
-        { value: "global", label: "Global" },
-        { value: "project", label: "Project" },
-      ],
-    }),
+    scope: () =>
+      select({
+        message: "Install scope?",
+        options: [
+          { value: "global", label: "Global" },
+          { value: "project", label: "Project" },
+        ],
+      }),
 
     // Access previous results:
-    confirm: ({ results }) => confirm({
-      message: `Install "${results.name}" to ${results.scope}?`,
-    }),
+    confirm: ({ results }) =>
+      confirm({
+        message: `Install "${results.name}" to ${results.scope}?`,
+      }),
   },
   {
     onCancel({ results }) {
-      cancel("Operation cancelled.")
-      process.exit(0)
+      cancel("Operation cancelled.");
+      process.exit(0);
     },
-  }
-)
+  },
+);
 
 // result.name   -> string
 // result.scope  -> "global" | "project"
@@ -246,29 +251,27 @@ Each prompt function receives `{ results: Partial<T> }` with all prior answers. 
 ## tasks — Sequential async task runner
 
 ```typescript
-import { tasks } from "@clack/prompts"
+import { tasks } from "@clack/prompts";
 
 await tasks([
   {
     title: "Cloning repository",
     task: async (message) => {
-      await cloneRepo(url)
-      message("Scanning for skills...")  // Update spinner text
-      await scanSkills(dir)
-      return "Repository cloned"         // Completion message
+      await cloneRepo(url);
+      message("Scanning for skills..."); // Update spinner text
+      await scanSkills(dir);
+      return "Repository cloned"; // Completion message
     },
   },
   {
     title: "Running security scan",
-    enabled: !skipScan,                  // Conditionally skip
+    enabled: !skipScan, // Conditionally skip
     task: async (message) => {
-      const warnings = await scanStatic(dir)
-      return warnings.length
-        ? `${warnings.length} warnings found`
-        : "No warnings"
+      const warnings = await scanStatic(dir);
+      return warnings.length ? `${warnings.length} warnings found` : "No warnings";
     },
   },
-])
+]);
 ```
 
 **Task shape:** `{ title: string, task: (message: (msg: string) => void) => Promise<string | void>, enabled?: boolean }`
@@ -303,13 +306,13 @@ Clack renders a connected vertical-bar UI:
 Use `picocolors` (or similar) for colored text within prompts:
 
 ```typescript
-import color from "picocolors"
+import color from "picocolors";
 
 await text({
   message: `What is your ${color.bold("project")} name?`,
-})
+});
 
-log.info(color.green("All checks passed!"))
+log.info(color.green("All checks passed!"));
 ```
 
 ## Pattern: mycli Prompt Wrappers
@@ -317,7 +320,7 @@ log.info(color.green("All checks passed!"))
 The project wraps clack prompts in `packages/cli/src/ui/prompts.ts` for consistent behavior:
 
 ```typescript
-import { select, confirm, isCancel, cancel } from "@clack/prompts"
+import { select, confirm, isCancel, cancel } from "@clack/prompts";
 
 export async function promptScope(): Promise<"global" | "project"> {
   const scope = await select({
@@ -326,26 +329,26 @@ export async function promptScope(): Promise<"global" | "project"> {
       { value: "global" as const, label: "Global (~/.agents/skills/)" },
       { value: "project" as const, label: "Project (.agents/skills/)" },
     ],
-  })
+  });
   if (isCancel(scope)) {
-    cancel("Operation cancelled.")
-    process.exit(2)
+    cancel("Operation cancelled.");
+    process.exit(2);
   }
-  return scope
+  return scope;
 }
 
 export async function promptInstall(warnings: boolean): Promise<boolean> {
   const result = await confirm({
     message: warnings ? "Install anyway?" : "Install?",
-    initialValue: !warnings,  // Default to "no" when there are warnings
+    initialValue: !warnings, // Default to "no" when there are warnings
     active: warnings ? "Yes, install" : "Yes",
     inactive: "No",
-  })
+  });
   if (isCancel(result)) {
-    cancel("Operation cancelled.")
-    process.exit(2)
+    cancel("Operation cancelled.");
+    process.exit(2);
   }
-  return result
+  return result;
 }
 ```
 
