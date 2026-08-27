@@ -646,11 +646,14 @@ export function buildProgram(deps: CliDeps = {}): Command {
           return;
         }
         if (options.list) {
-          for (const tool of config.tools) {
-            updaterDeps.out(
-              `${picocolors.bold(tool.bin)}|https://github.com/${tool.repo}|${tool.versionCmd}|${tool.updateCmd}\n`,
-            );
-          }
+          updaterDeps.out(
+            `${config.tools
+              .map(
+                (tool) =>
+                  `${picocolors.bold(tool.bin)}\n  Repository:      https://github.com/${tool.repo}\n  Version command: ${tool.versionCmd}\n  Update command:  ${tool.updateCmd}`,
+              )
+              .join("\n\n")}\n`,
+          );
           return;
         }
         process.exitCode = await runUpdater(config.tools, updaterDeps);

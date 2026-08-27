@@ -75,9 +75,17 @@ Print configured tools without checking versions or running updates:
 ./delta --list
 ```
 
-Each row is `tool|repository|version_command|update_command`; only the tool
-name is bold when the terminal supports it. Use `--config <path>` to list a
-different configuration file.
+Each tool is a labeled block; only the tool name is bold when the terminal
+supports it. Command text is printed verbatim, so shell syntax remains clear:
+
+```text
+delta
+  Repository:      https://github.com/wsouto/delta
+  Version command: delta --version
+  Update command:  curl -fsSL https://example.test/install.sh | sh
+```
+
+Use `--config <path>` to list a different configuration file.
 
 Use `delta --help` after installation, or `./delta --help` from a source
 checkout, to see all CLI options.
