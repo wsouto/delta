@@ -188,7 +188,7 @@ does not regenerate `CHANGELOG.md` from it.
 
 ### Toolchain
 
-- Runtime: Bun 1.3.14. `index.ts` is the ESM module entry; the `#!/usr/bin/env bun` shebang is load-bearing.
+- Runtime: Bun 1.4.x. `index.ts` is the ESM module entry; the `#!/usr/bin/env bun` shebang is load-bearing.
 - CLI surface: `commander` (parsing), `picocolors` (colors), `valibot` (tools configuration schema
   - `v.InferOutput` types), `@octokit/rest` (`rest.repos.getLatestRelease`).
 - Tests: `bun:test`, in-process.
