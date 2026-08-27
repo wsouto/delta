@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Failed tool checks now print their version header before the error status,
+  using `unknown` for unavailable versions.
+
 ## [0.3.1] - 2026-08-27
 
 ### Changed

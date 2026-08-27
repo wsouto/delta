@@ -45,6 +45,7 @@ update_command = "vp upgrade"
 function captureUpdater(overrides: UpdateDeps = {}) {
   const out: string[] = [];
   const err: string[] = [];
+  const events: string[] = [];
   const tagCalls: string[] = [];
   const shellCalls: string[] = [];
   const deps = {
@@ -65,13 +66,17 @@ function captureUpdater(overrides: UpdateDeps = {}) {
       return tag;
     },
     out: (s: string) => {
-      out.push(stripAnsi(s));
+      const value = stripAnsi(s);
+      out.push(value);
+      events.push(`out:${value}`);
     },
     err: (s: string) => {
-      err.push(stripAnsi(s));
+      const value = stripAnsi(s);
+      err.push(value);
+      events.push(`err:${value}`);
     },
   };
-  return { deps, out, err, tagCalls, shellCalls };
+  return { deps, out, err, events, tagCalls, shellCalls };
 }
 
 describe("configuration format", () => {
@@ -358,7 +363,10 @@ describe("runUpdater", () => {
     );
 
     expect(exitCode).toBe(1);
-    expect(err.join("")).toContain("Failed to get installed version for owner/missing-tool");
+    expect(out.join("")).toContain("missing-tool: installed=unknown latest=unknown\n");
+    expect(err.join("")).toContain(
+      "[error] Failed to get installed version for owner/missing-tool",
+    );
     expect(err.join("")).toContain("command not found");
     expect(out.join("")).toContain("oh-my-pi: installed=2.3.4 latest=2.3.4");
     expect(shellCalls).toEqual(["missing --version", "omp --version"]);
@@ -442,7 +450,7 @@ describe("runUpdater", () => {
   });
 
   test("tool failures do not stop later checks and produce aggregate failure", async () => {
-    const { deps, err, shellCalls } = captureUpdater({
+    const { deps, err, out, shellCalls } = captureUpdater({
       shell: {
         "opencode --version": { output: "1.2.3\n", exitCode: 0 },
         "opencode upgrade": { output: "", exitCode: 7 },
@@ -460,9 +468,14 @@ describe("runUpdater", () => {
 
     expect(exitCode).toBe(1);
     const text = err.join("");
+    expect(out.join("")).toContain("opencode: installed=1.2.3 latest=2.0.0\n");
     expect(text).toContain("[error] Failed to update anomalyco/opencode");
+    expect(out.join("")).not.toContain("[updated] opencode from 1.2.3 to 2.0.0");
+    expect(out.join("")).toContain("omp: installed=unknown latest=unknown\n");
     expect(text).toContain("[error] Failed to get installed version for can1357/oh-my-pi");
+    expect(out.join("")).toContain("droast: installed=2.0.0 latest=unknown\n");
     expect(text).toContain("[error] Failed to get latest version for immanuwell/dockerfile-roast");
+    expect(out.join("")).toContain("vp: installed=unknown latest=unknown\n");
     expect(text).toContain("[error] Failed to get installed version for voidzero-dev/vite-plus");
     expect(text).toContain("Update completed with errors");
     expect(shellCalls).toEqual([
@@ -475,7 +488,7 @@ describe("runUpdater", () => {
   });
 
   test("release lookup failure is reported and later tools still run", async () => {
-    const { deps, err, shellCalls } = captureUpdater({
+    const { deps, err, out, shellCalls } = captureUpdater({
       shell: {
         "opencode --version": { output: "1.2.3\n", exitCode: 0 },
         "omp --version": { output: "2.3.4\n", exitCode: 0 },
@@ -492,6 +505,7 @@ describe("runUpdater", () => {
     const exitCode = await runUpdater(tools, deps);
 
     expect(exitCode).toBe(1);
+    expect(out.join("")).toContain("opencode: installed=1.2.3 latest=unknown\n");
     expect(err.join("")).toContain("[error] Failed to get latest version for anomalyco/opencode");
     expect(shellCalls).toEqual([
       "opencode --version",
@@ -535,7 +549,7 @@ describe("runUpdater", () => {
   });
 
   test("release lookup returning 404 is reported as 'no GitHub release found'", async () => {
-    const { deps, err, tagCalls } = captureUpdater({
+    const { deps, err, events, out, tagCalls } = captureUpdater({
       shell: { "opencode --version": { output: "1.0.0\n", exitCode: 0 } },
       tagThrows: { "anomalyco/opencode": 404 },
     });
@@ -551,7 +565,12 @@ describe("runUpdater", () => {
     const exitCode = await runUpdater(oneTool, deps);
 
     expect(exitCode).toBe(1);
+    expect(out.join("")).toBe("opencode: installed=1.0.0 latest=unknown\n\n");
     expect(err.join("")).toContain("[error] No GitHub release found for anomalyco/opencode");
+    expect(events.slice(0, 2)).toEqual([
+      "out:opencode: installed=1.0.0 latest=unknown\n",
+      "err:[error] No GitHub release found for anomalyco/opencode\n",
+    ]);
     expect(tagCalls).toEqual(["anomalyco/opencode"]);
   });
 });

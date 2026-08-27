@@ -23,7 +23,8 @@ The tool:
 
 1. Runs each configured version command and extracts the first `X.Y.Z` match.
 2. Looks up the latest tag via the GitHub API — no `gh` CLI required.
-3. Prints `installed=<v> latest=<v>` for each configured tool.
+3. Prints `installed=<v> latest=<v>` for each configured tool (`unknown` when a
+   version cannot be obtained).
 4. Runs the configured update command when versions differ.
 
 ## Add a Tool
