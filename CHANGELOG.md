@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Scan staged changes for secrets with Gitleaks before commit.
 
+### Changed
+
+- The installer now creates the default configuration with the `[tools.delta]`
+  entry on first install.
+- The default configuration is bundled with the release archive instead of
+  being downloaded from the `main` branch.
+
 ## [0.2.0] - 2026-08-26
 
 ### Added

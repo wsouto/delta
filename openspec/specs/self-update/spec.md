@@ -8,7 +8,7 @@ instead of rebuilding itself from source, installable on any machine with a shel
 ## Requirements
 
 ### Requirement: Self entry installs from the release artifact
-The `[tools.delta]` entry in the user's `delta.toml` SHALL install the prebuilt
+The `[tools.delta]` entry in the user's `tools.toml` SHALL install the prebuilt
 binary from the GitHub release artifact by performing a single `curl | sh`, where
 the fetched script (`install.sh`) performs the release download and install. The
 `update_command` SHALL NOT embed the download or install shell logic inline in the
@@ -19,7 +19,7 @@ config.
 - **THEN** the command fetches `install.sh` from a stable repo URL and pipes it to `sh`, which downloads the release artifact and replaces the installed binary
 
 #### Scenario: Config holds only the curl pipeline
-- **WHEN** a user inspects the `[tools.delta]` entry in `delta.toml`
+- **WHEN** a user inspects the `[tools.delta]` entry in `tools.toml`
 - **THEN** the `update_command` is a single `curl ... | sh` and contains no inline download, extraction, or install steps
 
 #### Scenario: Update does not require a source checkout
@@ -60,6 +60,19 @@ PATH lookup (`Bun.which`) resolves it, so subsequent runs detect the new version
 #### Scenario: Path lookup finds the updated binary
 - **WHEN** the update completes
 - **THEN** running `delta --version` reports the newly installed version matching the release tag
+
+### Requirement: Initial configuration comes from the release artifact
+The release archive SHALL include `tools.toml`. On first installation, the
+install script SHALL copy that bundled template to the resolved default
+configuration path without downloading configuration from the repository branch.
+
+#### Scenario: Fresh install creates the default configuration
+- **WHEN** `tools.toml` does not exist at the resolved default configuration path
+- **THEN** the install script copies the template from the downloaded release archive
+
+#### Scenario: Existing configuration is preserved
+- **WHEN** `tools.toml` already exists at the resolved default configuration path
+- **THEN** the install script leaves it unchanged
 
 #### Scenario: Already up to date is a no-op
 - **WHEN** the installed version equals the latest release tag
