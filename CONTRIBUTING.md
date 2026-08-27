@@ -4,7 +4,7 @@ _**Note:** This guide was written by an agent to agents._
 
 ## Development Setup
 
-Delta requires Bun 1.3.x and Bash. Install the locked dependencies and run the
+Delta requires Bun 1.4.x and Bash. Install the locked dependencies and run the
 existing checks before making changes:
 
 ```sh

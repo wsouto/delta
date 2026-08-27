@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Read-only `--list` output for registered tools.
 
+### Changed
+
+- Development and release automation now use the latest Bun 1.4.x patch release.
+
 ## [0.2.1] - 2026-08-26
 
 ### Security
