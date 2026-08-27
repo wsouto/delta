@@ -302,6 +302,7 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   const current =
     versionResult.exitCode === 0 ? versionResult.output.match(/\d+\.\d+\.\d+/)?.[0] : undefined;
   if (!current) {
+    deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=unknown latest=unknown\n`);
     const details = versionResult.output.trim();
     deps.err(
       `${picocolors.bold(picocolors.red("[error]"))} Failed to get installed version for ${tool.repo}${details ? `: ${details}` : ""}\n`,
@@ -313,6 +314,7 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   try {
     latest = (await deps.getLatestTag(tool.repo)).replace(/^v/, "");
   } catch (e) {
+    deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=${current} latest=unknown\n`);
     const status = (e as { status?: number } | null)?.status;
     deps.err(
       `${picocolors.bold(picocolors.red("[error]"))} ${
@@ -324,6 +326,7 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     return false;
   }
   if (!/^\d+\.\d+\.\d+$/.test(latest)) {
+    deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=${current} latest=unknown\n`);
     deps.err(
       `${picocolors.bold(picocolors.red("[error]"))} Failed to get latest version for ${tool.repo}\n`,
     );
@@ -336,15 +339,16 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     return true;
   }
 
-  deps.out(
-    `${picocolors.bold(picocolors.green("[updated]"))} ${tool.bin} from ${current} to ${latest}\n`,
-  );
   const updateResult = await deps.runShell(tool.updateCmd);
   if (updateResult.exitCode !== 0) {
     deps.err(`${picocolors.bold(picocolors.red("[error]"))} Failed to update ${tool.repo}\n`);
     return false;
   }
+  deps.out(
+    `${picocolors.bold(picocolors.green("[updated]"))} ${tool.bin} from ${current} to ${latest}\n`,
+  );
   return true;
+
 }
 
 export async function runUpdater(toolList: Tool[], deps: UpdaterDeps): Promise<number> {
