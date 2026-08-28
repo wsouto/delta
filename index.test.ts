@@ -738,7 +738,7 @@ update_command = "opencode upgrade"
   });
 
   test("diagnostic logs retain shell and release failure details", async () => {
-    const { deps, err } = captureUpdater({
+    const { deps, err, out } = captureUpdater({
       shell: {
         "missing --version": { output: "version failed\n", exitCode: 127 },
         "opencode --version": { output: "1.0.0\n", exitCode: 0 },
@@ -790,6 +790,8 @@ update_command = "vp upgrade"
       expect(process.exitCode).toBe(1);
       expect(err.join("")).toContain("Update completed with errors");
       expect(err.join("")).toContain("Failed to get installed version");
+      expect(out.join("")).toContain("bun: installed=1.4.0 latest=unknown");
+      expect(err.join("")).toContain("Failed to get latest version for oven-sh/bun");
       expect(log).toContain('tool=missing phase=version command="missing --version" exit_code=127');
       expect(log).toContain('output="version failed\\n"');
       expect(log).toContain("tool=opencode phase=latest status=503 message=");
