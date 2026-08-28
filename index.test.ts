@@ -797,6 +797,7 @@ update_command = "vp upgrade"
       expect(log).toContain(
         'detail tool=bun phase=latest result=invalid-tag returned_tag="bun-v1.4.0" expected="X.Y.Z or vX.Y.Z"',
       );
+      expect(log).toContain('tool=bun phase=latest raw_tag="bun-v1.4.0"');
       expect(log).toContain('tool=vp phase=update command="vp upgrade" exit_code=7');
       expect(log).toContain('output="upgrade failed\\n"');
     } finally {
