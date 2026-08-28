@@ -55,8 +55,8 @@ Select it with `--config <path>`; otherwise Delta uses
 - **`GITHUB_TOKEN` is the only auth env var.** No `GH_TOKEN` fallback. Unauthenticated
   requests work at 60 req/hr, which is plenty for three tools.
 - **Version parsing is intentionally strict.** Installed output uses the first
-  `[0-9]+\.[0-9]+\.[0-9]+` substring. Release tags must normalize to exactly `X.Y.Z` after
-  stripping a leading `v`.
+  `[0-9]+\.[0-9]+\.[0-9]+` substring. Release tags must end with stable `X.Y.Z`
+  or `vX.Y.Z`; the numeric suffix is compared.
 - **`import.meta.main` guards the CLI.** `parseAsync(process.argv)` only runs when `index.ts`
   is the entry. Tests import the module without triggering it.
 - **Configured commands run in child Bash processes.**

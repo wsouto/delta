@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Failed tool checks now print their version header before the error status,
   using `unknown` for unavailable versions.
 - Diagnostic logs now identify rejected GitHub release tags and their accepted formats.
+- GitHub release tags ending in stable versions, including Bun's `bun-vX.Y.Z` format, now compare correctly.
 
 ## [0.3.1] - 2026-08-27
 

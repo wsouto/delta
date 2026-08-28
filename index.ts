@@ -334,11 +334,11 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
   }
   deps.diagnostic?.(shellDiagnostic(tool, "version", versionResult));
 
-  let latest: string;
+  let latest: string | undefined;
   let rawLatest: string;
   try {
     rawLatest = await deps.getLatestTag(tool.repo);
-    latest = rawLatest.replace(/^v/, "");
+    latest = rawLatest.match(/(?:^|-)v?(\d+\.\d+\.\d+)$/)?.[1];
   } catch (e) {
     deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=${current} latest=unknown\n`);
     const status = (e as { status?: number } | null)?.status;
@@ -357,11 +357,11 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     return false;
   }
   deps.diagnostic?.(
-    `tool=${tool.bin} phase=latest raw_tag=${JSON.stringify(rawLatest)} normalized=${JSON.stringify(latest)}`,
+    `tool=${tool.bin} phase=latest raw_tag=${JSON.stringify(rawLatest)} normalized=${JSON.stringify(latest ?? null)}`,
   );
-  if (!/^\d+\.\d+\.\d+$/.test(latest)) {
+  if (!latest) {
     deps.diagnostic?.(
-      `tool=${tool.bin} phase=latest result=invalid-tag returned_tag=${JSON.stringify(rawLatest)} expected="X.Y.Z or vX.Y.Z"`,
+      `tool=${tool.bin} phase=latest result=invalid-tag returned_tag=${JSON.stringify(rawLatest)} expected="tag ending in X.Y.Z or vX.Y.Z"`,
     );
     deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=${current} latest=unknown\n`);
     deps.err(
@@ -756,7 +756,7 @@ export function buildProgram(deps: CliDeps = {}): Command {
           runLog?.push(
             ...config.tools.map(
               (tool) =>
-                `tool=${tool.bin} repository=${tool.repo} version_command=${JSON.stringify(
+                `tool=${tool.bin} repository=https://github.com/${tool.repo} version_command=${JSON.stringify(
                   tool.versionCmd,
                 )} update_command=${JSON.stringify(tool.updateCmd)}`,
             ),

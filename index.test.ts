@@ -344,6 +344,29 @@ describe("runUpdater", () => {
     expect(shellCalls).toEqual(["omp --version"]);
     expect(tagCalls).toEqual(["can1357/oh-my-pi"]);
   });
+  test("accepts product-prefixed stable release tags", async () => {
+    const { deps, out, shellCalls } = captureUpdater({
+      shell: { "bun --version": { output: "1.4.0\n", exitCode: 0 } },
+      tags: { "oven-sh/bun": "bun-v1.4.0" },
+    });
+
+    const exitCode = await runUpdater(
+      [
+        {
+          bin: "bun",
+          repo: "oven-sh/bun",
+          versionCmd: "bun --version",
+          updateCmd: "bun update",
+        },
+      ],
+      deps,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(out.join("")).toContain("bun: installed=1.4.0 latest=1.4.0");
+    expect(out.join("")).toContain("[no-op] already up to date");
+    expect(shellCalls).toEqual(["bun --version"]);
+  });
 
   test("reports a failed version command and continues with later tools", async () => {
     const { deps, err, out, shellCalls } = captureUpdater({
@@ -699,7 +722,7 @@ update_command = "opencode upgrade"
       await run("2.0.0");
 
       const log = await Bun.file(join(tempDir, "delta.log")).text();
-      expect(log).toContain("tool=opencode repository=anomalyco/opencode");
+      expect(log).toContain("tool=opencode repository=https://github.com/anomalyco/opencode");
       expect(log).toContain("opencode: installed=2.0.0 latest=2.0.0");
       expect(log).not.toContain("installed=1.2.3");
     } finally {
@@ -747,7 +770,7 @@ update_command = "opencode upgrade"
         "vp upgrade": { output: "upgrade failed\n", exitCode: 7 },
       },
       tags: {
-        "oven-sh/bun": "bun-v1.4.0",
+        "oven-sh/bun": "bun-nightly",
         "voidzero-dev/vite-plus": "3.1.0",
       },
       tagThrows: { "anomalyco/opencode": 503 },
@@ -797,9 +820,9 @@ update_command = "vp upgrade"
       expect(log).toContain("tool=opencode phase=latest status=503 message=");
       expect(log).toContain("503 for anomalyco/opencode");
       expect(log).toContain(
-        'detail tool=bun phase=latest result=invalid-tag returned_tag="bun-v1.4.0" expected="X.Y.Z or vX.Y.Z"',
+        'detail tool=bun phase=latest result=invalid-tag returned_tag="bun-nightly" expected="tag ending in X.Y.Z or vX.Y.Z"',
       );
-      expect(log).toContain('tool=bun phase=latest raw_tag="bun-v1.4.0"');
+      expect(log).toContain('tool=bun phase=latest raw_tag="bun-nightly" normalized=null');
       expect(log).toContain('tool=vp phase=update command="vp upgrade" exit_code=7');
       expect(log).toContain('output="upgrade failed\\n"');
     } finally {
