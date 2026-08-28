@@ -742,12 +742,12 @@ update_command = "opencode upgrade"
       shell: {
         "missing --version": { output: "version failed\n", exitCode: 127 },
         "opencode --version": { output: "1.0.0\n", exitCode: 0 },
-        "droast --version": { output: "2.0.0\n", exitCode: 0 },
+        "bun --version": { output: "1.4.0\n", exitCode: 0 },
         "vp --version": { output: "3.0.0\n", exitCode: 0 },
         "vp upgrade": { output: "upgrade failed\n", exitCode: 7 },
       },
       tags: {
-        "immanuwell/dockerfile-roast": "bad-tag",
+        "oven-sh/bun": "bun-v1.4.0",
         "voidzero-dev/vite-plus": "3.1.0",
       },
       tagThrows: { "anomalyco/opencode": 503 },
@@ -764,10 +764,10 @@ repository = "https://github.com/anomalyco/opencode"
 version_command = "opencode --version"
 update_command = "opencode upgrade"
 
-[tools.droast]
-repository = "https://github.com/immanuwell/dockerfile-roast"
-version_command = "droast --version"
-update_command = "droast update"
+[tools.bun]
+repository = "https://github.com/oven-sh/bun"
+version_command = "bun --version"
+update_command = "bun update"
 
 [tools.vp]
 repository = "https://github.com/voidzero-dev/vite-plus"
@@ -794,7 +794,9 @@ update_command = "vp upgrade"
       expect(log).toContain('output="version failed\\n"');
       expect(log).toContain("tool=opencode phase=latest status=503 message=");
       expect(log).toContain("503 for anomalyco/opencode");
-      expect(log).toContain('tool=droast phase=latest raw_tag="bad-tag"');
+      expect(log).toContain(
+        'detail tool=bun phase=latest result=invalid-tag returned_tag="bun-v1.4.0" expected="X.Y.Z or vX.Y.Z"',
+      );
       expect(log).toContain('tool=vp phase=update command="vp upgrade" exit_code=7');
       expect(log).toContain('output="upgrade failed\\n"');
     } finally {

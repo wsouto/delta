@@ -360,6 +360,9 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     `tool=${tool.bin} phase=latest raw_tag=${JSON.stringify(rawLatest)} normalized=${JSON.stringify(latest)}`,
   );
   if (!/^\d+\.\d+\.\d+$/.test(latest)) {
+    deps.diagnostic?.(
+      `tool=${tool.bin} phase=latest result=invalid-tag returned_tag=${JSON.stringify(rawLatest)} expected="X.Y.Z or vX.Y.Z"`,
+    );
     deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=${current} latest=unknown\n`);
     deps.err(
       `${picocolors.bold(picocolors.red("[error]"))} Failed to get latest version for ${tool.repo}\n`,
