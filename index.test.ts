@@ -2145,7 +2145,7 @@ update_command = "example update"
   test("--version prints the package version", () => {
     const { stdout, error } = captureRun(["--version"]);
     expect(error).toBeDefined();
-    expect(stdout.trim()).toBe("0.3.1");
+    expect(stdout.trim()).toBe("0.4.0");
   });
 
   test("unknown option produces an error", () => {
