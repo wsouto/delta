@@ -14,7 +14,7 @@
       "devDependencies": {
         "@commitlint/cli": "^21.2.2",
         "@commitlint/config-conventional": "^21.2.2",
-        "@evilmartians/lefthook": "^2.1.10",
+        "@evilmartians/lefthook": "^2.1.12",
         "@taplo/cli": "^0.7.0",
         "@types/bun": "^1.4.0",
         "auto-changelog": "^2.6.0",
@@ -71,7 +71,7 @@
 
     "@conventional-changelog/template": ["@conventional-changelog/template@1.4.0", "", {}, "sha512-aalGyl7dbB5PArRebDIX43ZvBlXrYm9uWzGJ26t+4SzJVPsOuvfILGGbw5X4yX7i50YEmJ8zvbiWnqH/AAnZqg=="],
 
-    "@evilmartians/lefthook": ["@evilmartians/lefthook@2.1.10", "", { "os": [ "linux", "win32", "darwin", ], "cpu": [ "x64", "ia32", "arm64", ], "bin": { "lefthook": "bin/index.js" } }, "sha512-l5tiHiPQQdFE27g8j8Y1fgvGP9jiIxaxU3Bejq845hJn3M1OT2+QwjB/oqIIb7px2cTxUqFndTCSxK+HPY40rg=="],
+    "@evilmartians/lefthook": ["@evilmartians/lefthook@2.1.12", "", { "os": [ "linux", "win32", "darwin", ], "cpu": [ "x64", "ia32", "arm64", ], "bin": { "lefthook": "bin/index.js" } }, "sha512-y/QRYkKeuJSSebsxt3COI3HIyc7mgWAwTXQLVdVFpprBb5XIC8jV20DLDYcbkmUHoQUq8yHkkGfkMDSR34xjbw=="],
 
     "@octokit/auth-token": ["@octokit/auth-token@6.0.0", "", {}, "sha512-P4YJBPdPSpWTQ1NU4XYdvHvXJJDxM6YwpS0FZHRgP7YFkdVxsWcpWGy/NVqlAA7PcPCnMacXlRm1y2PFZRWL/w=="],
 
