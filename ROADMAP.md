@@ -6,13 +6,13 @@ The following requirements apply to every Tool Administration feature (Add, Edit
 
 ### CLI Conventions
 
-- Wire each administration flag into the existing commander program using the project’s current argument-parsing conventions.
-- Each flag takes the tool’s unique name or identifier as its `<tool>` argument.
+- Wire each administration subcommand into the existing commander program using the project’s current argument-parsing conventions.
+- Each administration subcommand takes the tool’s unique name or identifier as its `<tool>` argument.
 - Document all administration options in `--help`.
 - A missing `<tool>` argument produces a clear usage or validation error.
 - Reject conflicting administration operations in the same invocation unless the existing CLI
   architecture explicitly supports it.
-- Preserve all existing CLI commands and behavior.
+- Preserve existing operation behavior; this CLI syntax migration is intentional.
 - Use consistent messages and exit behavior across add, edit, and delete operations.
 
 ### Storage & Persistence
@@ -20,7 +20,7 @@ The following requirements apply to every Tool Administration feature (Add, Edit
 - Add, edit, and delete operations persist through the project’s existing storage mechanism.
 - The file written is the resolved configuration path, honoring `--config <path>` when provided.
 - The XDG fallback resolution is used when `--config` is not provided.
-- `--print-config-path` reports the file that administration operations would modify.
+- `config-path` reports the file that administration operations would modify.
 - Do not create the configuration file implicitly unless required by the operation.
 - Reuse existing data-access and persistence utilities.
 - Keep prompt logic separate from storage logic when practical.
@@ -111,7 +111,7 @@ under `CONTRIBUTING.md`.
 Implement:
 
 ```text
--a, --add <tool>
+add <tool>
 ```
 
 ### Behavior
@@ -143,7 +143,7 @@ Implement:
 - Cancelling does not create partial data.
 - Success and error states are clearly communicated.
 - Relevant automated tests pass.
-- Preservation of existing CLI behavior.
+- Preservation of existing operation behavior.
 
 Complete the Feature Lifecycle to finish this feature.
 
@@ -154,7 +154,7 @@ Complete the Feature Lifecycle to finish this feature.
 Implement:
 
 ```text
--e, --edit <tool>
+edit <tool>
 ```
 
 ### Behavior
@@ -189,7 +189,7 @@ Implement:
 - Cancelling preserves the original data.
 - A no-op edit does not rewrite the configuration.
 - Relevant automated tests pass.
-- Preservation of existing CLI behavior.
+- Preservation of existing operation behavior.
 
 Complete the Feature Lifecycle to finish this feature.
 
@@ -200,7 +200,7 @@ Complete the Feature Lifecycle to finish this feature.
 Implement:
 
 ```text
--d, --delete <tool>
+delete <tool>
 ```
 
 ### Behavior
@@ -238,7 +238,7 @@ Implement:
 - Deleting the final configured tool is allowed, and the configuration must remain a valid TOML document.
 - No other tool data is modified.
 - Relevant automated tests pass.
-- Preservation of existing CLI behavior.
+- Preservation of existing operation behavior.
 
 Complete the Feature Lifecycle to finish this feature.
 

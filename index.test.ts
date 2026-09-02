@@ -623,7 +623,7 @@ function captureRun(argv: string[]): Capture {
   const stderr: string[] = [];
   let error: unknown;
   try {
-    buildProgram()
+    const program = buildProgram()
       .exitOverride()
       .configureOutput({
         writeOut: (s) => {
@@ -632,8 +632,18 @@ function captureRun(argv: string[]): Capture {
         writeErr: (s) => {
           stderr.push(s);
         },
-      })
-      .parse(["node", "delta", ...argv]);
+      });
+    for (const command of program.commands) {
+      command.exitOverride().configureOutput({
+        writeOut: (s) => {
+          stdout.push(s);
+        },
+        writeErr: (s) => {
+          stderr.push(s);
+        },
+      });
+    }
+    program.parse(["node", "delta", ...argv]);
   } catch (e) {
     error = e;
   }
@@ -646,13 +656,13 @@ describe("delta CLI", () => {
     expect(error).toBeDefined();
     expect(stdout).toContain("GitHub releases");
     expect(stdout).toContain("Usage:");
-    expect(stdout).toContain("-c, --config <path>");
-    expect(stdout).toContain("--print-config-path");
+    expect(stdout).toContain("--config <path>");
+    expect(stdout).toContain("config-path");
   });
 
-  test("--help documents add option", () => {
+  test("--help documents add command", () => {
     const { stdout } = captureRun(["--help"]);
-    expect(stdout).toContain("-a, --add <tool>");
+    expect(stdout).toContain("add <tool>");
   });
 
   test("--help describes --config as writable", () => {
@@ -660,7 +670,7 @@ describe("delta CLI", () => {
     expect(stdout).toContain("read/write tool configuration");
   });
 
-  test("--list prints configured tools without updater side effects", async () => {
+  test("list prints configured tools without updater side effects", async () => {
     const { deps, err, out, shellCalls, tagCalls } = captureUpdater();
     const readPaths: string[] = [];
 
@@ -680,7 +690,7 @@ update_command = "curl -fsSL https://example.test/install.sh | sh"
 `;
       },
       updaterDeps: deps,
-    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--list"]);
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "list"]);
 
     expect(readPaths).toEqual(["/tmp/custom-delta.toml"]);
     expect(out.join("")).toBe(
@@ -698,7 +708,7 @@ update_command = "curl -fsSL https://example.test/install.sh | sh"
     expect(tagCalls).toEqual([]);
   });
 
-  test("--list --json prints compact JSON without updater side effects", async () => {
+  test("list --json prints compact JSON without updater side effects", async () => {
     const { deps, err, out, shellCalls, tagCalls } = captureUpdater();
 
     await buildProgram({
@@ -714,7 +724,7 @@ version_command = "delta --version"
 update_command = "curl -fsSL https://example.test/install.sh | sh"
 `,
       updaterDeps: deps,
-    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--list", "--json"]);
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "list", "--json"]);
 
     const text = out.join("");
     expect(text.endsWith("}\n")).toBe(true);
@@ -930,61 +940,33 @@ update_command = "opencode upgrade"
     }
   });
 
-  test("--list is documented and rejects incompatible modes", async () => {
-    expect(captureRun(["--help"]).stdout).toContain("--list");
+  test("list is documented and removed flag forms are rejected", () => {
+    expect(captureRun(["--help"]).stdout).toContain("list");
 
-    for (const args of [
-      ["--list", "--add", "example"],
-      ["--list", "--edit", "example"],
-      ["--list", "--delete", "example"],
-      ["--list", "--print-config-path"],
+    for (const argv of [
+      ["--add", "example"],
+      ["-a", "example"],
+      ["--edit", "example"],
+      ["-e", "example"],
+      ["--delete", "example"],
+      ["-d", "example"],
+      ["--list"],
+      ["--json"],
+      ["--print-config-path"],
+      ["-c", "/tmp/x.toml", "list"],
     ]) {
-      const { deps, err, out } = captureUpdater();
-      const exitCode = process.exitCode;
-
-      try {
-        await buildProgram({
-          configPath: "/tmp/delta/tools.toml",
-          readFile: async () => {
-            throw new Error("must not read");
-          },
-          updaterDeps: deps,
-        }).parseAsync(["node", "delta", ...args]);
-
-        expect(err.join("")).toContain("cannot be used together");
-        expect(out.join("")).toBe("");
-      } finally {
-        process.exitCode = exitCode ?? 0;
-      }
+      const { error } = captureRun(argv);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toMatch(/unknown option/i);
     }
   });
 
-  test("--json is documented and requires --list", async () => {
-    expect(captureRun(["--help"]).stdout).toContain("--json");
+  test("--json is documented on list and rejected elsewhere", () => {
+    expect(captureRun(["list", "--help"]).stdout).toContain("--json");
 
-    for (const args of [
-      ["--json"],
-      ["--json", "--add", "example"],
-      ["--json", "--print-config-path"],
-    ]) {
-      const { deps, err, out } = captureUpdater();
-      const exitCode = process.exitCode;
-
-      try {
-        await buildProgram({
-          configPath: "/tmp/delta/tools.toml",
-          readFile: async () => {
-            throw new Error("must not read");
-          },
-          updaterDeps: deps,
-        }).parseAsync(["node", "delta", ...args]);
-
-        expect(err.join("")).toContain("--json requires --list");
-        expect(out.join("")).toBe("");
-      } finally {
-        process.exitCode = exitCode ?? 0;
-      }
-    }
+    const { error } = captureRun(["--json"]);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/unknown option/i);
   });
 
   test("adds prompted tool to missing configuration", async () => {
@@ -1007,7 +989,7 @@ update_command = "opencode upgrade"
       renameFile: async (from, to) => {
         renames.push([from, to]);
       },
-    }).parseAsync(["node", "delta", "--add", "example"]);
+    }).parseAsync(["node", "delta", "add", "example"]);
 
     expect(writes).toHaveLength(1);
     expect(writes[0]?.[1]).toContain("[tools.example]");
@@ -1036,7 +1018,7 @@ update_command = "opencode upgrade"
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--add", "example"]);
+    }).parseAsync(["node", "delta", "add", "example"]);
 
     expect(written).toContain("# Configure tools below");
     expect(written).toContain("[tools.example]");
@@ -1063,7 +1045,7 @@ update_command = "opencode upgrade"
       renameFile: async () => {
         wrote = true;
       },
-    }).parseAsync(["node", "delta", "--add", "example"]);
+    }).parseAsync(["node", "delta", "add", "example"]);
 
     expect(wrote).toBeFalse();
     expect(out.join("")).toBe("Add cancelled\n");
@@ -1093,7 +1075,7 @@ update_command = "example update"
         writeFile: async () => {
           wrote = true;
         },
-      }).parseAsync(["node", "delta", "--add", "example"]);
+      }).parseAsync(["node", "delta", "add", "example"]);
 
       expect(prompted).toBeFalse();
       expect(wrote).toBeFalse();
@@ -1127,7 +1109,7 @@ update_command = "example update"
       },
       renameFile: async () => {},
       makeDir: async () => {},
-    }).parseAsync(["node", "delta", "--add", "example"]);
+    }).parseAsync(["node", "delta", "add", "example"]);
 
     expect(wrote).toBeTrue();
     expect(err.join("")).toContain("invalid configuration");
@@ -1147,7 +1129,7 @@ update_command = "example update"
           prompted = true;
           return "unused";
         },
-      }).parseAsync(["node", "delta", "--add", "example"]);
+      }).parseAsync(["node", "delta", "add", "example"]);
 
       expect(prompted).toBeFalse();
       expect(err.join("")).toContain("invalid configuration");
@@ -1182,7 +1164,7 @@ update_command = "example update"
         renameFile: async () => {
           renamed = true;
         },
-      }).parseAsync(["node", "delta", "--add", "example"]);
+      }).parseAsync(["node", "delta", "add", "example"]);
 
       expect(renamed).toBeFalse();
       expect(err.join("")).toContain("disk full");
@@ -1217,7 +1199,7 @@ update_command = "example update"
         removeFile: async (path) => {
           removed.push(path);
         },
-      }).parseAsync(["node", "delta", "--add", "example"]);
+      }).parseAsync(["node", "delta", "add", "example"]);
 
       expect(removed).toHaveLength(1);
       expect(err.join("")).toContain("rename failed");
@@ -1250,19 +1232,19 @@ update_command = "old update"
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--add", "new"]);
+    }).parseAsync(["node", "delta", "add", "new"]);
 
     expect(written).toContain(existing);
     expect(written).toContain("[tools.new]");
   });
 
-  test("--add requires a tool argument", () => {
-    const { error } = captureRun(["--add"]);
+  test("add requires a tool argument", () => {
+    const { error } = captureRun(["add"]);
     expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toMatch(/argument missing/i);
+    expect((error as Error).message).toMatch(/missing required argument/i);
   });
 
-  test("--add rejects an empty tool name", async () => {
+  test("add rejects an empty tool name", async () => {
     const { deps, err, out } = captureUpdater();
     const exitCode = process.exitCode;
 
@@ -1273,7 +1255,7 @@ update_command = "old update"
           throw new Error("must not read");
         },
         updaterDeps: deps,
-      }).parseAsync(["node", "delta", "--add", ""]);
+      }).parseAsync(["node", "delta", "add", ""]);
 
       expect(err.join("")).toContain("tool name must not be empty");
       expect(out.join("")).toBe("");
@@ -1282,27 +1264,7 @@ update_command = "old update"
     }
   });
 
-  test("--add conflicts with --print-config-path", async () => {
-    const { deps, err, out } = captureUpdater();
-    const exitCode = process.exitCode;
-
-    try {
-      await buildProgram({
-        configPath: "/tmp/delta/tools.toml",
-        readFile: async () => {
-          throw new Error("must not read");
-        },
-        updaterDeps: deps,
-      }).parseAsync(["node", "delta", "--add", "example", "--print-config-path"]);
-
-      expect(err.join("")).toContain("cannot be used together");
-      expect(out.join("")).toBe("");
-    } finally {
-      process.exitCode = exitCode ?? 0;
-    }
-  });
-
-  test("--add honors --config", async () => {
+  test("add honors --config", async () => {
     const { deps } = captureUpdater();
     let renamedTo = "";
 
@@ -1324,7 +1286,7 @@ update_command = "old update"
       renameFile: async (_from, to) => {
         renamedTo = to;
       },
-    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--add", "example"]);
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "add", "example"]);
 
     expect(renamedTo).toBe("/tmp/custom-delta.toml");
   });
@@ -1352,7 +1314,7 @@ update_command = "old update"
         renameFile: async (_from, to) => {
           renamedTo = to;
         },
-      }).parseAsync(["node", "delta", "--add", "example"]);
+      }).parseAsync(["node", "delta", "add", "example"]);
     } finally {
       if (previous === undefined) {
         delete process.env["XDG_CONFIG_HOME"];
@@ -1394,7 +1356,7 @@ update_command = "example update"
     }
   });
 
-  test("--print-config-path exits before loading configuration", async () => {
+  test("config-path exits before loading configuration", async () => {
     const { deps, out } = captureUpdater();
 
     await buildProgram({
@@ -1403,23 +1365,23 @@ update_command = "example update"
         throw new Error("must not read");
       },
       updaterDeps: deps,
-    }).parseAsync(["node", "delta", "--print-config-path"]);
+    }).parseAsync(["node", "delta", "config-path"]);
 
     expect(out.join("")).toBe("/tmp/delta/tools.toml\n");
   });
 
-  test("--help documents edit option", () => {
+  test("--help documents edit command", () => {
     const { stdout } = captureRun(["--help"]);
-    expect(stdout).toContain("-e, --edit <tool>");
+    expect(stdout).toContain("edit <tool>");
   });
 
-  test("--edit requires a tool argument", () => {
-    const { error } = captureRun(["--edit"]);
+  test("edit requires a tool argument", () => {
+    const { error } = captureRun(["edit"]);
     expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toMatch(/argument missing/i);
+    expect((error as Error).message).toMatch(/missing required argument/i);
   });
 
-  test("--edit conflicts with --print-config-path", async () => {
+  test("edit rejects an empty tool name", async () => {
     const { deps, err, out } = captureUpdater();
     const exitCode = process.exitCode;
 
@@ -1430,47 +1392,7 @@ update_command = "example update"
           throw new Error("must not read");
         },
         updaterDeps: deps,
-      }).parseAsync(["node", "delta", "--edit", "example", "--print-config-path"]);
-
-      expect(err.join("")).toContain("cannot be used together");
-      expect(out.join("")).toBe("");
-    } finally {
-      process.exitCode = exitCode ?? 0;
-    }
-  });
-
-  test("--edit conflicts with --add", async () => {
-    const { deps, err, out } = captureUpdater();
-    const exitCode = process.exitCode;
-
-    try {
-      await buildProgram({
-        configPath: "/tmp/delta/tools.toml",
-        readFile: async () => {
-          throw new Error("must not read");
-        },
-        updaterDeps: deps,
-      }).parseAsync(["node", "delta", "--add", "example", "--edit", "example"]);
-
-      expect(err.join("")).toContain("cannot be used together");
-      expect(out.join("")).toBe("");
-    } finally {
-      process.exitCode = exitCode ?? 0;
-    }
-  });
-
-  test("--edit rejects an empty tool name", async () => {
-    const { deps, err, out } = captureUpdater();
-    const exitCode = process.exitCode;
-
-    try {
-      await buildProgram({
-        configPath: "/tmp/delta/tools.toml",
-        readFile: async () => {
-          throw new Error("must not read");
-        },
-        updaterDeps: deps,
-      }).parseAsync(["node", "delta", "--edit", ""]);
+      }).parseAsync(["node", "delta", "edit", ""]);
 
       expect(err.join("")).toContain("tool name must not be empty");
       expect(out.join("")).toBe("");
@@ -1504,7 +1426,7 @@ update_command = "example update"
       makeDir: async () => {},
       writeFile: async () => {},
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "edit", "example"]);
 
     expect(seen).toEqual([
       ["Repository URL", "https://github.com/owner/example"],
@@ -1538,7 +1460,7 @@ update_command = "example update"
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "edit", "example"]);
 
     expect(written).toContain('version_command = "example --version 2"');
     expect(written).toContain('update_command = "example update 2"');
@@ -1568,7 +1490,7 @@ update_command = "example update"
         writeFile: async () => {
           wrote = true;
         },
-      }).parseAsync(["node", "delta", "--edit", "ghost"]);
+      }).parseAsync(["node", "delta", "edit", "ghost"]);
 
       expect(prompted).toBeFalse();
       expect(wrote).toBeFalse();
@@ -1601,7 +1523,7 @@ update_command = "example update"
       renameFile: async () => {
         wrote = true;
       },
-    }).parseAsync(["node", "delta", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "edit", "example"]);
 
     expect(wrote).toBeFalse();
     expect(out.join("")).toBe("Edit cancelled\n");
@@ -1627,7 +1549,7 @@ update_command = "example update"
         wrote = true;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "edit", "example"]);
 
     expect(wrote).toBeFalse();
     expect(out.join("")).toBe("No changes made\n");
@@ -1663,7 +1585,7 @@ update_command = "other update"
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "edit", "example"]);
 
     expect(written).toContain("[tools.example]");
     expect(written).toContain("# keep this comment");
@@ -1699,7 +1621,7 @@ update_command = "example update"
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "edit", "example"]);
 
     expect(written).toContain('version_command = "example --version 2"');
     expect(written).toContain('update_command = "example update 2"');
@@ -1736,7 +1658,7 @@ update_command = "other update"
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "edit", "example"]);
 
     expect(written).toContain('version_command = "example --version 2"');
     expect(written).toContain('update_command = "example update 2"');
@@ -1770,7 +1692,7 @@ update_command = "example update" # keep this note
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "edit", "example"]);
 
     expect(written).toContain('version_command = "example --version 2"  # first version');
     expect(written).toContain('update_command = "example update 2" # keep this note');
@@ -1798,14 +1720,14 @@ update_command = "example update" # keep this note
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "edit", "example"]);
 
     expect(written).toContain('version_command = "example --version 2"');
     expect(written).toContain("\r\n");
     expect(out.join("")).toContain("Edited tool example");
   });
 
-  test("--edit honors --config", async () => {
+  test("edit honors --config", async () => {
     const { deps } = captureUpdater();
     let renamedTo = "";
     const existing = `[tools.example]
@@ -1832,23 +1754,23 @@ update_command = "example update"
       renameFile: async (_from, to) => {
         renamedTo = to;
       },
-    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--edit", "example"]);
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "edit", "example"]);
 
     expect(renamedTo).toBe("/tmp/custom-delta.toml");
   });
 
-  test("--help documents delete option", () => {
+  test("--help documents delete command", () => {
     const { stdout } = captureRun(["--help"]);
-    expect(stdout).toContain("-d, --delete <tool>");
+    expect(stdout).toContain("delete <tool>");
   });
 
-  test("--delete requires a tool argument", () => {
-    const { error } = captureRun(["--delete"]);
+  test("delete requires a tool argument", () => {
+    const { error } = captureRun(["delete"]);
     expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toMatch(/argument missing/i);
+    expect((error as Error).message).toMatch(/missing required argument/i);
   });
 
-  test("--delete conflicts with --print-config-path", async () => {
+  test("delete rejects an empty tool name", async () => {
     const { deps, err, out } = captureUpdater();
     const exitCode = process.exitCode;
 
@@ -1859,67 +1781,7 @@ update_command = "example update"
           throw new Error("must not read");
         },
         updaterDeps: deps,
-      }).parseAsync(["node", "delta", "--delete", "example", "--print-config-path"]);
-
-      expect(err.join("")).toContain("cannot be used together");
-      expect(out.join("")).toBe("");
-    } finally {
-      process.exitCode = exitCode ?? 0;
-    }
-  });
-
-  test("--delete conflicts with --add", async () => {
-    const { deps, err, out } = captureUpdater();
-    const exitCode = process.exitCode;
-
-    try {
-      await buildProgram({
-        configPath: "/tmp/delta/tools.toml",
-        readFile: async () => {
-          throw new Error("must not read");
-        },
-        updaterDeps: deps,
-      }).parseAsync(["node", "delta", "--add", "example", "--delete", "example"]);
-
-      expect(err.join("")).toContain("cannot be used together");
-      expect(out.join("")).toBe("");
-    } finally {
-      process.exitCode = exitCode ?? 0;
-    }
-  });
-
-  test("--delete conflicts with --edit", async () => {
-    const { deps, err, out } = captureUpdater();
-    const exitCode = process.exitCode;
-
-    try {
-      await buildProgram({
-        configPath: "/tmp/delta/tools.toml",
-        readFile: async () => {
-          throw new Error("must not read");
-        },
-        updaterDeps: deps,
-      }).parseAsync(["node", "delta", "--edit", "example", "--delete", "example"]);
-
-      expect(err.join("")).toContain("cannot be used together");
-      expect(out.join("")).toBe("");
-    } finally {
-      process.exitCode = exitCode ?? 0;
-    }
-  });
-
-  test("--delete rejects an empty tool name", async () => {
-    const { deps, err, out } = captureUpdater();
-    const exitCode = process.exitCode;
-
-    try {
-      await buildProgram({
-        configPath: "/tmp/delta/tools.toml",
-        readFile: async () => {
-          throw new Error("must not read");
-        },
-        updaterDeps: deps,
-      }).parseAsync(["node", "delta", "--delete", ""]);
+      }).parseAsync(["node", "delta", "delete", ""]);
 
       expect(err.join("")).toContain("tool name must not be empty");
       expect(out.join("")).toBe("");
@@ -1950,7 +1812,7 @@ update_command = "example update"
         writeFile: async () => {
           wrote = true;
         },
-      }).parseAsync(["node", "delta", "--delete", "ghost"]);
+      }).parseAsync(["node", "delta", "delete", "ghost"]);
 
       expect(prompted).toBeFalse();
       expect(wrote).toBeFalse();
@@ -1983,7 +1845,7 @@ update_command = "example update"
       makeDir: async () => {},
       writeFile: async () => {},
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--delete", "example"]);
+    }).parseAsync(["node", "delta", "delete", "example"]);
 
     const stdout = out.join("");
     expect(confirmSeen).toBeTrue();
@@ -2020,7 +1882,7 @@ update_command = "other update"
       renameFile: async () => {
         wrote = true;
       },
-    }).parseAsync(["node", "delta", "--delete", "example"]);
+    }).parseAsync(["node", "delta", "delete", "example"]);
 
     expect(wrote).toBeFalse();
     const stdout = out.join("");
@@ -2050,13 +1912,13 @@ update_command = "example update"
       renameFile: async () => {
         wrote = true;
       },
-    }).parseAsync(["node", "delta", "--delete", "example"]);
+    }).parseAsync(["node", "delta", "delete", "example"]);
 
     expect(wrote).toBeFalse();
     expect(out.join("")).toContain("Delete cancelled");
   });
 
-  test("--delete honors --config and removes only the named tool", async () => {
+  test("delete honors --config and removes only the named tool", async () => {
     const { deps, out } = captureUpdater();
     let renamedTo = "";
     let written = "";
@@ -2087,7 +1949,7 @@ update_command = "other update"
       renameFile: async (_from, to) => {
         renamedTo = to;
       },
-    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--delete", "example"]);
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "delete", "example"]);
 
     expect(renamedTo).toBe("/tmp/custom-delta.toml");
     expect(written).not.toContain("[tools.example]");
@@ -2098,7 +1960,7 @@ update_command = "other update"
     expect(out.join("")).toContain("Deleted tool example");
   });
 
-  test("--delete uses the resolved configuration path by default", async () => {
+  test("delete uses the resolved configuration path by default", async () => {
     const { deps } = captureUpdater();
     const previous = process.env["XDG_CONFIG_HOME"];
     process.env["XDG_CONFIG_HOME"] = "/tmp/delta-xdg";
@@ -2124,7 +1986,7 @@ update_command = "example update"
         renameFile: async (_from, to) => {
           renamedTo = to;
         },
-      }).parseAsync(["node", "delta", "--delete", "example"]);
+      }).parseAsync(["node", "delta", "delete", "example"]);
     } finally {
       if (previous === undefined) {
         delete process.env["XDG_CONFIG_HOME"];
@@ -2137,7 +1999,7 @@ update_command = "example update"
     expect(renamedTo).toBe("/tmp/delta-xdg/delta/tools.toml");
   });
 
-  test("--delete preserves the blank separator between surviving sections", async () => {
+  test("delete preserves the blank separator between surviving sections", async () => {
     const { deps, out } = captureUpdater();
     let written = "";
     const existing = `[tools.a]
@@ -2166,7 +2028,7 @@ update_command = "c update"
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--delete", "example"]);
+    }).parseAsync(["node", "delta", "delete", "example"]);
 
     expect(written).not.toContain("[tools.example]");
     expect(written).toContain("[tools.a]\nrepository =");
@@ -2180,7 +2042,7 @@ update_command = "c update"
     expect(out.join("")).toContain("Deleted tool example");
   });
 
-  test("--delete permits deleting the final configured tool, leaving a valid TOML document", async () => {
+  test("delete permits deleting the final configured tool, leaving a valid TOML document", async () => {
     const { deps, out } = captureUpdater();
     let written = "";
     const existing = `[tools.example]
@@ -2200,7 +2062,7 @@ update_command = "example update"
         written = content;
       },
       renameFile: async () => {},
-    }).parseAsync(["node", "delta", "--delete", "example"]);
+    }).parseAsync(["node", "delta", "delete", "example"]);
 
     expect(written).not.toContain("[tools.example]");
     expect(() => Bun.TOML.parse(written)).not.toThrow();

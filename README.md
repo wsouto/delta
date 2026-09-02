@@ -33,7 +33,7 @@ The tool:
 Add a tool without editing TOML:
 
 ```sh
-./delta --add <tool>
+./delta add <tool>
 ```
 
 The command prompts for the repository URL, version command, and update command.
@@ -45,7 +45,7 @@ when cancelled, creates missing parent directories, and writes atomically.
 Update an existing tool without hand-editing TOML:
 
 ```sh
-./delta --edit <tool>
+./delta edit <tool>
 ```
 
 Each prompt is pre-filled with the tool's current value, and it reports an error
@@ -57,22 +57,22 @@ configuration unchanged, and an edit that changes nothing does not rewrite the f
 Remove an existing tool without hand-editing TOML:
 
 ```sh
-./delta --delete <tool>
+./delta delete <tool>
 ```
 
 Delta prints the tool's current data and asks for confirmation before writing.
 Rejecting the confirmation or cancelling at the prompt leaves stored data
 unchanged; confirming removes the named tool while preserving every other tool
 definition, and removing the final tool is permitted and leaves a valid TOML
-document. Deletion writes atomically through the same path as `--add` and
-`--edit`.
+document. Deletion writes atomically through the same path as `add` and
+`edit`.
 
 ## List Tools
 
 Print configured tools without checking versions or running updates:
 
 ```sh
-./delta --list
+./delta list
 ```
 
 Each tool is a labeled block; only the tool name is bold when the terminal
@@ -85,10 +85,10 @@ delta
   Update command:  curl -fsSL https://example.test/install.sh | sh
 ```
 
-For machine-readable output, add `--json` (requires `--list`):
+For machine-readable output, add `--json`:
 
 ```sh
-./delta --list --json | jq .
+./delta list --json | jq .
 ```
 
 This prints one compact JSON object with a `tools` array; each entry carries
@@ -118,14 +118,14 @@ checkout, to see all CLI options.
 Delta reads `$XDG_CONFIG_HOME/delta/tools.toml`; when `XDG_CONFIG_HOME` is unset
 or empty, it reads `~/.config/delta/tools.toml`. If the file is missing, a normal
 run prints setup instructions and exits; the installer creates it with the
-`[tools.delta]` entry on first install, and `--add <tool>` can create it manually.
-Use `--config <path>` to select another file; `--print-config-path` prints the
+`[tools.delta]` entry on first install, and `delta add <tool>` can create it manually.
+Use `--config <path>` to select another file; `delta config-path` prints the
 selected configuration path and exits.
 
 Normal update runs replace `delta.log` beside the selected configuration file.
 The plain-text log records the run timestamps, configured tools and commands,
 the installed/latest versions, forwarded updater output, and failure details.
-Listing, administration, and `--print-config-path` commands do not write it.
+Listing, administration, and `config-path` commands do not write it.
 
 The tracked repository `tools.toml` is copied from the release archive to the
 default configuration path by the installer only when that file does not exist.

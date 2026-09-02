@@ -343,9 +343,10 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=${current} latest=unknown\n`);
     const status = (e as { status?: number } | null)?.status;
     deps.err(
-      `${picocolors.bold(picocolors.red("[error]"))} ${status === 404
-        ? `No GitHub release found for ${tool.repo}`
-        : `Failed to get latest version for ${tool.repo}`
+      `${picocolors.bold(picocolors.red("[error]"))} ${
+        status === 404
+          ? `No GitHub release found for ${tool.repo}`
+          : `Failed to get latest version for ${tool.repo}`
       }\n`,
     );
     deps.diagnostic?.(
@@ -452,367 +453,359 @@ async function writeConfig(configPath: string, source: string, deps: CliDeps): P
     )(temporaryPath, source);
     await (deps.renameFile ?? rename)(temporaryPath, configPath);
   } catch (error) {
-    await (deps.removeFile ?? unlink)(temporaryPath).catch(() => { });
+    await (deps.removeFile ?? unlink)(temporaryPath).catch(() => {});
     throw error;
   }
 }
 
 export function buildProgram(deps: CliDeps = {}): Command {
-  return new Command()
+  const resolveConfig = (configOption?: string): string =>
+    configOption ??
+    deps.configPath ??
+    resolveConfigPath({
+      xdgConfigHome: process.env["XDG_CONFIG_HOME"],
+      homeDir: homedir(),
+    });
+
+  const defaultUpdaterDeps = (): UpdaterDeps => {
+    let octokit: Octokit | undefined;
+    return {
+      runShell,
+      getLatestTag: async (repo: string) => {
+        const client = (octokit ??= new Octokit({ auth: process.env["GITHUB_TOKEN"] }));
+        const [owner, name] = repo.split("/") as [string, string];
+        const { data } = await client.rest.repos.getLatestRelease({ owner, repo: name });
+        return data.tag_name;
+      },
+      out: (s: string) => {
+        process.stdout.write(s);
+      },
+      err: (s: string) => {
+        process.stderr.write(s);
+      },
+    };
+  };
+
+  const depsFor = (): UpdaterDeps => deps.updaterDeps ?? defaultUpdaterDeps();
+
+  const fail = (updaterDeps: UpdaterDeps, error: unknown): void => {
+    const message = error instanceof Error ? error.message : String(error);
+    updaterDeps.err(`${picocolors.bold(picocolors.red("[error]"))} ${message}\n`);
+    process.exitCode = 1;
+  };
+
+  const loadToolsOrFirstRun = async (
+    configPath: string,
+    updaterDeps: UpdaterDeps,
+  ): Promise<Tool[] | undefined> => {
+    const config = await loadTools(configPath, deps.readFile);
+    if (config.status === "missing") {
+      updaterDeps.out(firstRunMessage(configPath));
+      process.exitCode = 1;
+      return undefined;
+    }
+    return config.tools;
+  };
+
+  const program = new Command()
     .name("delta")
     .description("Keep curated CLI tools up to date against their latest GitHub releases")
     .version("0.4.1")
-    .option("-c, --config <path>", "read/write tool configuration at this path")
-    .option("-a, --add <tool>", "add a tool to configuration")
-    .option("-e, --edit <tool>", "edit a tool in configuration")
-    .option("-d, --delete <tool>", "delete a tool from configuration")
-    .option("--list", "list configured tools without checking for updates")
-    .option("--json", "with --list, print the tool list as JSON")
-    .option("--print-config-path", "print resolved configuration path and exit")
-    .action(
-      async (options: {
-        add?: string;
-        edit?: string;
-        delete?: string;
-        list?: boolean;
-        json?: boolean;
-        config?: string;
-        printConfigPath?: boolean;
-      }) => {
-        const configPath =
-          options.config ??
-          deps.configPath ??
-          resolveConfigPath({
-            xdgConfigHome: process.env["XDG_CONFIG_HOME"],
-            homeDir: homedir(),
-          });
-        let updaterDeps: UpdaterDeps =
-          deps.updaterDeps ??
-          (() => {
-            let octokit: Octokit | undefined;
-            return {
-              runShell,
-              getLatestTag: async (repo: string) => {
-                const client = (octokit ??= new Octokit({ auth: process.env["GITHUB_TOKEN"] }));
-                const [owner, name] = repo.split("/") as [string, string];
-                const { data } = await client.rest.repos.getLatestRelease({ owner, repo: name });
-                return data.tag_name;
-              },
-              out: (s: string) => {
-                process.stdout.write(s);
-              },
-              err: (s: string) => {
-                process.stderr.write(s);
-              },
-            };
-          })();
-        let runLog: string[] | undefined;
-        let terminalUpdaterDeps: UpdaterDeps = updaterDeps;
-
-        try {
-          if (options.add !== undefined && options.edit !== undefined) {
-            throw new ConfigError(configPath, "--add and --edit cannot be used together");
-          }
-          if (options.add !== undefined && options.delete !== undefined) {
-            throw new ConfigError(configPath, "--add and --delete cannot be used together");
-          }
-          if (options.edit !== undefined && options.delete !== undefined) {
-            throw new ConfigError(configPath, "--edit and --delete cannot be used together");
-          }
-          if (options.add !== undefined && options.printConfigPath) {
-            throw new ConfigError(
-              configPath,
-              "--add and --print-config-path cannot be used together",
+    .option("--config <path>", "read/write tool configuration at this path")
+    .action(async (options: { config?: string }) => {
+      const baseDeps = depsFor();
+      let updaterDeps = baseDeps;
+      const terminalUpdaterDeps = baseDeps;
+      let runLog: string[] | undefined;
+      const configPath = resolveConfig(options.config);
+      try {
+        runLog = [`run_started=${new Date().toISOString()}`, `config=${configPath}`];
+        updaterDeps = {
+          ...baseDeps,
+          out: (s) => {
+            terminalUpdaterDeps.out(s);
+            if (runLog) appendLogText(runLog, "out ", s);
+          },
+          err: (s) => {
+            terminalUpdaterDeps.err(s);
+            if (runLog) appendLogText(runLog, "err ", s);
+          },
+          diagnostic: (s) => {
+            if (runLog) appendLogText(runLog, "detail ", s);
+          },
+        };
+        const tools = await loadToolsOrFirstRun(configPath, updaterDeps);
+        if (!tools) {
+          runLog = undefined;
+          return;
+        }
+        runLog?.push(
+          ...tools.map(
+            (tool) =>
+              `tool=${tool.bin} repository=https://github.com/${tool.repo} version_command=${JSON.stringify(
+                tool.versionCmd,
+              )} update_command=${JSON.stringify(tool.updateCmd)}`,
+          ),
+        );
+        process.exitCode = await runUpdater(tools, updaterDeps);
+      } catch (error) {
+        fail(updaterDeps, error);
+      } finally {
+        if (runLog) {
+          runLog.push(`run_finished=${new Date().toISOString()}`);
+          const logPath = join(dirname(configPath), "delta.log");
+          try {
+            await (deps.writeLog ?? ((path, content) => writeConfig(path, content, deps)))(
+              logPath,
+              `${runLog.join("\n")}\n`,
             );
-          }
-          if (options.edit !== undefined && options.printConfigPath) {
-            throw new ConfigError(
-              configPath,
-              "--edit and --print-config-path cannot be used together",
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            terminalUpdaterDeps.err(
+              `${picocolors.bold(picocolors.yellow("[warning]"))} Failed to write diagnostic log ${logPath}${message ? `: ${message}` : ""}\n`,
             );
-          }
-          if (options.delete !== undefined && options.printConfigPath) {
-            throw new ConfigError(
-              configPath,
-              "--delete and --print-config-path cannot be used together",
-            );
-          }
-          if (options.list && options.add !== undefined) {
-            throw new ConfigError(configPath, "--list and --add cannot be used together");
-          }
-          if (options.list && options.edit !== undefined) {
-            throw new ConfigError(configPath, "--list and --edit cannot be used together");
-          }
-          if (options.list && options.delete !== undefined) {
-            throw new ConfigError(configPath, "--list and --delete cannot be used together");
-          }
-          if (options.list && options.printConfigPath) {
-            throw new ConfigError(
-              configPath,
-              "--list and --print-config-path cannot be used together",
-            );
-          }
-          if (options.json && !options.list) {
-            throw new ConfigError(configPath, "--json requires --list");
-          }
-          if (options.printConfigPath) {
-            updaterDeps.out(`${configPath}\n`);
-            return;
-          }
-          if (options.add !== undefined) {
-            const bin = options.add.trim();
-            if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
-            const prompt =
-              deps.prompt ??
-              ((message: string, initialValue?: string) => text({ message, initialValue }));
-            const isPromptCancelled = deps.isCancelled ?? isCancel;
-            const config = await loadToolsForAdd(configPath, deps.readFile);
-            if (config.status === "loaded" && config.tools.some((tool) => tool.bin === bin)) {
-              throw new ConfigError(configPath, `tool "${bin}" already exists`);
-            }
-
-            const existingSource = config.source;
-            let source = "";
-            while (!source) {
-              const values: string[] = [];
-              for (const message of ["Repository URL", "Version command", "Update command"]) {
-                const value = await prompt(message);
-                if (isPromptCancelled(value)) {
-                  updaterDeps.out("Add cancelled\n");
-                  return;
-                }
-                if (typeof value !== "string") {
-                  throw new ConfigError(configPath, "prompt did not return text");
-                }
-                values.push(value.trim());
-              }
-              const [repository, versionCommand, updateCommand] = values as [
-                string,
-                string,
-                string,
-              ];
-              const addition = toolToml(bin, { repository, versionCommand, updateCommand });
-              const candidate =
-                config.status === "missing"
-                  ? addition
-                  : `${existingSource}${existingSource.endsWith("\n") ? "\n" : "\n\n"}${addition}`;
-              try {
-                parseTools(candidate, configPath);
-                source = candidate;
-              } catch (error) {
-                if (error instanceof ConfigError) {
-                  updaterDeps.err(
-                    `${picocolors.bold(picocolors.red("[error]"))} ${error.message}\n`,
-                  );
-                  continue;
-                }
-                throw error;
-              }
-            }
-
-            await writeConfig(configPath, source, deps);
-            updaterDeps.out(`\nAdded tool ${bin}\n`);
-            return;
-          }
-          if (options.edit !== undefined) {
-            const bin = options.edit.trim();
-            if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
-            const prompt =
-              deps.prompt ??
-              ((message: string, initialValue?: string) => text({ message, initialValue }));
-            const isPromptCancelled = deps.isCancelled ?? isCancel;
-            const config = await loadToolsForAdd(configPath, deps.readFile);
-            const current =
-              config.status === "loaded"
-                ? config.tools.find((tool) => tool.bin === bin)
-                : undefined;
-            if (!current) {
-              throw new ConfigError(configPath, `tool "${bin}" does not exist`);
-            }
-
-            const existingSource = config.source;
-            const initialValues: Record<string, string> = {
-              "Repository URL": `https://github.com/${current.repo}`,
-              "Version command": current.versionCmd,
-              "Update command": current.updateCmd,
-            };
-            let source = "";
-            while (!source) {
-              const values: string[] = [];
-              for (const message of ["Repository URL", "Version command", "Update command"]) {
-                const value = await prompt(message, initialValues[message]);
-                if (isPromptCancelled(value)) {
-                  updaterDeps.out("Edit cancelled\n");
-                  return;
-                }
-                if (typeof value !== "string") {
-                  throw new ConfigError(configPath, "prompt did not return text");
-                }
-                values.push(value.trim());
-              }
-              const [repository, versionCommand, updateCommand] = values as [
-                string,
-                string,
-                string,
-              ];
-              const candidate = editToolToml(
-                existingSource,
-                bin,
-                { repository, versionCommand, updateCommand },
-                configPath,
-              );
-              try {
-                parseTools(candidate, configPath);
-              } catch (error) {
-                if (error instanceof ConfigError) {
-                  updaterDeps.err(
-                    `${picocolors.bold(picocolors.red("[error]"))} ${error.message}\n`,
-                  );
-                  continue;
-                }
-                throw error;
-              }
-              if (
-                githubRepo(repository, configPath, bin) === current.repo &&
-                versionCommand === current.versionCmd &&
-                updateCommand === current.updateCmd
-              ) {
-                updaterDeps.out("No changes made\n");
-                return;
-              }
-              source = candidate;
-            }
-
-            await writeConfig(configPath, source, deps);
-            updaterDeps.out(`\nEdited tool ${bin}\n`);
-            return;
-          }
-          if (options.delete !== undefined) {
-            const bin = options.delete.trim();
-            if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
-            const config = await loadToolsForAdd(configPath, deps.readFile);
-            const current =
-              config.status === "loaded"
-                ? config.tools.find((tool) => tool.bin === bin)
-                : undefined;
-            if (!current) {
-              throw new ConfigError(configPath, `tool "${bin}" does not exist`);
-            }
-
-            updaterDeps.out(
-              `Tool: ${current.bin}\n` +
-              `Repository: https://github.com/${current.repo}\n` +
-              `Version command: ${current.versionCmd}\n` +
-              `Update command: ${current.updateCmd}\n`,
-            );
-
-            const confirmation = deps.prompt
-              ? await deps.prompt(`Delete tool ${current.bin}?`, false)
-              : await confirm({ message: `Delete tool ${current.bin}?`, initialValue: false });
-            const isPromptCancelled = deps.isCancelled ?? isCancel;
-            if (isPromptCancelled(confirmation) || confirmation !== true) {
-              updaterDeps.out("Delete cancelled\n");
-              return;
-            }
-
-            const candidate = deleteToolToml(config.source, current.bin, configPath);
-            if (/^\s*\[[ \t]*tools\.[^\]]+\]/m.test(candidate)) {
-              parseTools(candidate, configPath);
-            } else {
-              try {
-                Bun.TOML.parse(candidate);
-              } catch (error) {
-                const msg = error instanceof Error ? error.message : "invalid TOML";
-                throw new ConfigError(configPath, `invalid TOML: ${msg}`);
-              }
-            }
-
-            await writeConfig(configPath, candidate, deps);
-            updaterDeps.out(`\nDeleted tool ${current.bin}\n`);
-            return;
-          }
-          terminalUpdaterDeps = updaterDeps;
-          if (!options.list) {
-            runLog = [`run_started=${new Date().toISOString()}`, `config=${configPath}`];
-            updaterDeps = {
-              ...updaterDeps,
-              out: (s) => {
-                terminalUpdaterDeps.out(s);
-                if (runLog) appendLogText(runLog, "out ", s);
-              },
-              err: (s) => {
-                terminalUpdaterDeps.err(s);
-                if (runLog) appendLogText(runLog, "err ", s);
-              },
-              diagnostic: (s) => {
-                if (runLog) appendLogText(runLog, "detail ", s);
-              },
-            };
-          }
-
-          const config = await loadTools(configPath, deps.readFile);
-          if (config.status === "missing") {
-            runLog = undefined;
-            updaterDeps.out(firstRunMessage(configPath));
-            process.exitCode = 1;
-            return;
-          }
-          runLog?.push(
-            ...config.tools.map(
-              (tool) =>
-                `tool=${tool.bin} repository=https://github.com/${tool.repo} version_command=${JSON.stringify(
-                  tool.versionCmd,
-                )} update_command=${JSON.stringify(tool.updateCmd)}`,
-            ),
-          );
-          if (options.list) {
-            if (options.json) {
-              updaterDeps.out(
-                `${JSON.stringify({
-                  tools: config.tools.map((tool) => ({
-                    name: tool.bin,
-                    repository: `https://github.com/${tool.repo}`,
-                    version_command: tool.versionCmd,
-                    update_command: tool.updateCmd,
-                  })),
-                })}\n`,
-              );
-            } else {
-              updaterDeps.out(
-                `${config.tools
-                  .map(
-                    (tool) =>
-                      `${picocolors.bold(tool.bin)}\n  Repository:      https://github.com/${tool.repo}\n  Version command: ${tool.versionCmd}\n  Update command:  ${tool.updateCmd}`,
-                  )
-                  .join("\n\n")}\n`,
-              );
-            }
-            return;
-          }
-          process.exitCode = await runUpdater(config.tools, updaterDeps);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          updaterDeps.err(`${picocolors.bold(picocolors.red("[error]"))} ${message}\n`);
-          process.exitCode = 1;
-        } finally {
-          if (runLog) {
-            runLog.push(`run_finished=${new Date().toISOString()}`);
-            const logPath = join(dirname(configPath), "delta.log");
-            try {
-              await (deps.writeLog ?? ((path, content) => writeConfig(path, content, deps)))(
-                logPath,
-                `${runLog.join("\n")}\n`,
-              );
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              terminalUpdaterDeps.err(
-                `${picocolors.bold(picocolors.yellow("[warning]"))} Failed to write diagnostic log ${logPath}${message ? `: ${message}` : ""}\n`,
-              );
-            }
           }
         }
-      },
-    );
+      }
+    });
+
+  program
+    .command("add <tool>")
+    .description("add a tool to configuration")
+    .action(async (tool: string) => {
+      const updaterDeps = depsFor();
+      const configPath = resolveConfig(program.opts()["config"]);
+      try {
+        const bin = tool.trim();
+        if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
+        const prompt =
+          deps.prompt ??
+          ((message: string, initialValue?: string) => text({ message, initialValue }));
+        const isPromptCancelled = deps.isCancelled ?? isCancel;
+        const config = await loadToolsForAdd(configPath, deps.readFile);
+        if (config.status === "loaded" && config.tools.some((tool) => tool.bin === bin)) {
+          throw new ConfigError(configPath, `tool "${bin}" already exists`);
+        }
+
+        const existingSource = config.source;
+        let source = "";
+        while (!source) {
+          const values: string[] = [];
+          for (const message of ["Repository URL", "Version command", "Update command"]) {
+            const value = await prompt(message);
+            if (isPromptCancelled(value)) {
+              updaterDeps.out("Add cancelled\n");
+              return;
+            }
+            if (typeof value !== "string") {
+              throw new ConfigError(configPath, "prompt did not return text");
+            }
+            values.push(value.trim());
+          }
+          const [repository, versionCommand, updateCommand] = values as [string, string, string];
+          const addition = toolToml(bin, { repository, versionCommand, updateCommand });
+          const candidate =
+            config.status === "missing"
+              ? addition
+              : `${existingSource}${existingSource.endsWith("\n") ? "\n" : "\n\n"}${addition}`;
+          try {
+            parseTools(candidate, configPath);
+            source = candidate;
+          } catch (error) {
+            if (error instanceof ConfigError) {
+              updaterDeps.err(`${picocolors.bold(picocolors.red("[error]"))} ${error.message}\n`);
+              continue;
+            }
+            throw error;
+          }
+        }
+
+        await writeConfig(configPath, source, deps);
+        updaterDeps.out(`\nAdded tool ${bin}\n`);
+        return;
+      } catch (error) {
+        fail(updaterDeps, error);
+      }
+    });
+
+  program
+    .command("edit <tool>")
+    .description("edit a tool in configuration")
+    .action(async (tool: string) => {
+      const updaterDeps = depsFor();
+      const configPath = resolveConfig(program.opts()["config"]);
+      try {
+        const bin = tool.trim();
+        if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
+        const prompt =
+          deps.prompt ??
+          ((message: string, initialValue?: string) => text({ message, initialValue }));
+        const isPromptCancelled = deps.isCancelled ?? isCancel;
+        const config = await loadToolsForAdd(configPath, deps.readFile);
+        const current =
+          config.status === "loaded" ? config.tools.find((tool) => tool.bin === bin) : undefined;
+        if (!current) {
+          throw new ConfigError(configPath, `tool "${bin}" does not exist`);
+        }
+
+        const existingSource = config.source;
+        const initialValues: Record<string, string> = {
+          "Repository URL": `https://github.com/${current.repo}`,
+          "Version command": current.versionCmd,
+          "Update command": current.updateCmd,
+        };
+        let source = "";
+        while (!source) {
+          const values: string[] = [];
+          for (const message of ["Repository URL", "Version command", "Update command"]) {
+            const value = await prompt(message, initialValues[message]);
+            if (isPromptCancelled(value)) {
+              updaterDeps.out("Edit cancelled\n");
+              return;
+            }
+            if (typeof value !== "string") {
+              throw new ConfigError(configPath, "prompt did not return text");
+            }
+            values.push(value.trim());
+          }
+          const [repository, versionCommand, updateCommand] = values as [string, string, string];
+          const candidate = editToolToml(
+            existingSource,
+            bin,
+            { repository, versionCommand, updateCommand },
+            configPath,
+          );
+          try {
+            parseTools(candidate, configPath);
+          } catch (error) {
+            if (error instanceof ConfigError) {
+              updaterDeps.err(`${picocolors.bold(picocolors.red("[error]"))} ${error.message}\n`);
+              continue;
+            }
+            throw error;
+          }
+          if (
+            githubRepo(repository, configPath, bin) === current.repo &&
+            versionCommand === current.versionCmd &&
+            updateCommand === current.updateCmd
+          ) {
+            updaterDeps.out("No changes made\n");
+            return;
+          }
+          source = candidate;
+        }
+
+        await writeConfig(configPath, source, deps);
+        updaterDeps.out(`\nEdited tool ${bin}\n`);
+        return;
+      } catch (error) {
+        fail(updaterDeps, error);
+      }
+    });
+
+  program
+    .command("delete <tool>")
+    .description("delete a tool from configuration")
+    .action(async (tool: string) => {
+      const updaterDeps = depsFor();
+      const configPath = resolveConfig(program.opts()["config"]);
+      try {
+        const bin = tool.trim();
+        if (!bin) throw new ConfigError(configPath, "tool name must not be empty");
+        const config = await loadToolsForAdd(configPath, deps.readFile);
+        const current =
+          config.status === "loaded" ? config.tools.find((tool) => tool.bin === bin) : undefined;
+        if (!current) {
+          throw new ConfigError(configPath, `tool "${bin}" does not exist`);
+        }
+
+        updaterDeps.out(
+          `Tool: ${current.bin}\n` +
+            `Repository: https://github.com/${current.repo}\n` +
+            `Version command: ${current.versionCmd}\n` +
+            `Update command: ${current.updateCmd}\n`,
+        );
+
+        const confirmation = deps.prompt
+          ? await deps.prompt(`Delete tool ${current.bin}?`, false)
+          : await confirm({ message: `Delete tool ${current.bin}?`, initialValue: false });
+        const isPromptCancelled = deps.isCancelled ?? isCancel;
+        if (isPromptCancelled(confirmation) || confirmation !== true) {
+          updaterDeps.out("Delete cancelled\n");
+          return;
+        }
+
+        const candidate = deleteToolToml(config.source, current.bin, configPath);
+        if (/^\s*\[[ \t]*tools\.[^\]]+\]/m.test(candidate)) {
+          parseTools(candidate, configPath);
+        } else {
+          try {
+            Bun.TOML.parse(candidate);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : "invalid TOML";
+            throw new ConfigError(configPath, `invalid TOML: ${msg}`);
+          }
+        }
+
+        await writeConfig(configPath, candidate, deps);
+        updaterDeps.out(`\nDeleted tool ${current.bin}\n`);
+        return;
+      } catch (error) {
+        fail(updaterDeps, error);
+      }
+    });
+
+  program
+    .command("list")
+    .description("list configured tools without checking for updates")
+    .option("--json", "print the tool list as JSON")
+    .action(async (options: { json?: boolean }) => {
+      const updaterDeps = depsFor();
+      const configPath = resolveConfig(program.opts()["config"]);
+      try {
+        const tools = await loadToolsOrFirstRun(configPath, updaterDeps);
+        if (!tools) return;
+        if (options.json) {
+          updaterDeps.out(
+            `${JSON.stringify({
+              tools: tools.map((tool) => ({
+                name: tool.bin,
+                repository: `https://github.com/${tool.repo}`,
+                version_command: tool.versionCmd,
+                update_command: tool.updateCmd,
+              })),
+            })}\n`,
+          );
+        } else {
+          updaterDeps.out(
+            `${tools
+              .map(
+                (tool) =>
+                  `${picocolors.bold(tool.bin)}\n  Repository:      https://github.com/${tool.repo}\n  Version command: ${tool.versionCmd}\n  Update command:  ${tool.updateCmd}`,
+              )
+              .join("\n\n")}\n`,
+          );
+        }
+        return;
+      } catch (error) {
+        fail(updaterDeps, error);
+      }
+    });
+
+  program
+    .command("config-path")
+    .description("print resolved configuration path and exit")
+    .action(async () => {
+      const updaterDeps = depsFor();
+      const configPath = resolveConfig(program.opts()["config"]);
+      try {
+        updaterDeps.out(`${configPath}\n`);
+      } catch (error) {
+        fail(updaterDeps, error);
+      }
+    });
+
+  return program;
 }
 
 if (import.meta.main) {
