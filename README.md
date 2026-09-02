@@ -85,6 +85,29 @@ delta
   Update command:  curl -fsSL https://example.test/install.sh | sh
 ```
 
+For machine-readable output, add `--json` (requires `--list`):
+
+```sh
+./delta --list --json | jq .
+```
+
+This prints one compact JSON object with a `tools` array; each entry carries
+`name`, `repository`, `version_command`, and `update_command` (shown indented
+by `jq` above; Delta emits a single line):
+
+```json
+{
+  "tools": [
+    {
+      "name": "delta",
+      "repository": "https://github.com/wsouto/delta",
+      "version_command": "delta --version",
+      "update_command": "curl -fsSL https://example.test/install.sh | sh"
+    }
+  ]
+}
+```
+
 Use `--config <path>` to list a different configuration file.
 
 Use `delta --help` after installation, or `./delta --help` from a source
