@@ -461,7 +461,7 @@ export function buildProgram(deps: CliDeps = {}): Command {
   return new Command()
     .name("delta")
     .description("Keep curated CLI tools up to date against their latest GitHub releases")
-    .version("0.4.0")
+    .version("0.4.1")
     .option("-c, --config <path>", "read/write tool configuration at this path")
     .option("-a, --add <tool>", "add a tool to configuration")
     .option("-e, --edit <tool>", "edit a tool in configuration")

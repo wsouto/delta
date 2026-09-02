@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, describe } from "bun:test";
+import pkg from "./package.json";
 import {
   buildProgram,
   loadTools,
@@ -2215,7 +2216,7 @@ update_command = "example update"
   test("--version prints the package version", () => {
     const { stdout, error } = captureRun(["--version"]);
     expect(error).toBeDefined();
-    expect(stdout.trim()).toBe("0.4.0");
+    expect(stdout.trim()).toBe(pkg.version);
   });
 
   test("unknown option produces an error", () => {
