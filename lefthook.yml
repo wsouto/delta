@@ -6,9 +6,7 @@ pre-commit:
     lint:
       run: bun run lint
     tests:
-      # Filters only staged .ts files for faster validation
-      glob: "*.ts"
-      run: bun test {staged_files}
+      run: bun test
     gitleaks:
       run: gitleaks git --staged
 
