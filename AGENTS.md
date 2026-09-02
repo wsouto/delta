@@ -1,21 +1,5 @@
 # Project Guidelines
 
-## Git Mode: Local Solo
-
-- Environment: Local-only Git repository (no remotes, no PRs).
-- Branching: Always branch off `main` using `<type>/<short-kebab-slug>`.
-- Verification: Run tests and checks locally before merging.
-- Integration: Merge directly to `main` with `git merge --no-ff` to preserve
-  branch history, then delete the local task branch.
-- Completion: Do not finish on a feature branch. After all tests and checks pass,
-  merge the work into `main`, remove the task branch and worktree, and verify that
-  `main` is checked out with a clean working tree.
-- Commits: Use Conventional Commits (`feat(scope): ...`, `fix(scope): ...`).
-- Changelog: Maintain `CHANGELOG.md` following the Keep a Changelog format
-  (curate `## [Unreleased]` under standard sections like `Added`, `Fixed`, etc.).
-
----
-
 CLI utility that keeps a curated list of CLI tools up to date by comparing the locally installed
 version against the latest GitHub release. `index.ts` is the implementation; run it with
 `bun run index.ts`.
