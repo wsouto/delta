@@ -696,6 +696,48 @@ update_command = "curl -fsSL https://example.test/install.sh | sh"
     expect(shellCalls).toEqual([]);
     expect(tagCalls).toEqual([]);
   });
+
+  test("--list --json prints compact JSON without updater side effects", async () => {
+    const { deps, err, out, shellCalls, tagCalls } = captureUpdater();
+
+    await buildProgram({
+      readFile: async () => `
+[tools.opencode]
+repository = "https://github.com/anomalyco/opencode"
+version_command = "opencode --version"
+update_command = "opencode upgrade"
+
+[tools.delta]
+repository = "https://github.com/wsouto/delta"
+version_command = "delta --version"
+update_command = "curl -fsSL https://example.test/install.sh | sh"
+`,
+      updaterDeps: deps,
+    }).parseAsync(["node", "delta", "--config", "/tmp/custom-delta.toml", "--list", "--json"]);
+
+    const text = out.join("");
+    expect(text.endsWith("}\n")).toBe(true);
+    expect(text.indexOf("\n")).toBe(text.length - 1);
+    expect(JSON.parse(text)).toEqual({
+      tools: [
+        {
+          name: "opencode",
+          repository: "https://github.com/anomalyco/opencode",
+          version_command: "opencode --version",
+          update_command: "opencode upgrade",
+        },
+        {
+          name: "delta",
+          repository: "https://github.com/wsouto/delta",
+          version_command: "delta --version",
+          update_command: "curl -fsSL https://example.test/install.sh | sh",
+        },
+      ],
+    });
+    expect(err.join("")).toBe("");
+    expect(shellCalls).toEqual([]);
+    expect(tagCalls).toEqual([]);
+  });
   test("normal runs overwrite a sibling diagnostic log", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "delta-run-log-"));
     const configPath = join(tempDir, "tools.toml");
@@ -909,6 +951,34 @@ update_command = "opencode upgrade"
         }).parseAsync(["node", "delta", ...args]);
 
         expect(err.join("")).toContain("cannot be used together");
+        expect(out.join("")).toBe("");
+      } finally {
+        process.exitCode = exitCode ?? 0;
+      }
+    }
+  });
+
+  test("--json is documented and requires --list", async () => {
+    expect(captureRun(["--help"]).stdout).toContain("--json");
+
+    for (const args of [
+      ["--json"],
+      ["--json", "--add", "example"],
+      ["--json", "--print-config-path"],
+    ]) {
+      const { deps, err, out } = captureUpdater();
+      const exitCode = process.exitCode;
+
+      try {
+        await buildProgram({
+          configPath: "/tmp/delta/tools.toml",
+          readFile: async () => {
+            throw new Error("must not read");
+          },
+          updaterDeps: deps,
+        }).parseAsync(["node", "delta", ...args]);
+
+        expect(err.join("")).toContain("--json requires --list");
         expect(out.join("")).toBe("");
       } finally {
         process.exitCode = exitCode ?? 0;

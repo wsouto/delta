@@ -467,6 +467,7 @@ export function buildProgram(deps: CliDeps = {}): Command {
     .option("-e, --edit <tool>", "edit a tool in configuration")
     .option("-d, --delete <tool>", "delete a tool from configuration")
     .option("--list", "list configured tools without checking for updates")
+    .option("--json", "with --list, print the tool list as JSON")
     .option("--print-config-path", "print resolved configuration path and exit")
     .action(
       async (options: {
@@ -474,6 +475,7 @@ export function buildProgram(deps: CliDeps = {}): Command {
         edit?: string;
         delete?: string;
         list?: boolean;
+        json?: boolean;
         config?: string;
         printConfigPath?: boolean;
       }) => {
@@ -549,6 +551,9 @@ export function buildProgram(deps: CliDeps = {}): Command {
               configPath,
               "--list and --print-config-path cannot be used together",
             );
+          }
+          if (options.json && !options.list) {
+            throw new ConfigError(configPath, "--json requires --list");
           }
           if (options.printConfigPath) {
             updaterDeps.out(`${configPath}\n`);
@@ -761,14 +766,27 @@ export function buildProgram(deps: CliDeps = {}): Command {
             ),
           );
           if (options.list) {
-            updaterDeps.out(
-              `${config.tools
-                .map(
-                  (tool) =>
-                    `${picocolors.bold(tool.bin)}\n  Repository:      https://github.com/${tool.repo}\n  Version command: ${tool.versionCmd}\n  Update command:  ${tool.updateCmd}`,
-                )
-                .join("\n\n")}\n`,
-            );
+            if (options.json) {
+              updaterDeps.out(
+                `${JSON.stringify({
+                  tools: config.tools.map((tool) => ({
+                    name: tool.bin,
+                    repository: `https://github.com/${tool.repo}`,
+                    version_command: tool.versionCmd,
+                    update_command: tool.updateCmd,
+                  })),
+                })}\n`,
+              );
+            } else {
+              updaterDeps.out(
+                `${config.tools
+                  .map(
+                    (tool) =>
+                      `${picocolors.bold(tool.bin)}\n  Repository:      https://github.com/${tool.repo}\n  Version command: ${tool.versionCmd}\n  Update command:  ${tool.updateCmd}`,
+                  )
+                  .join("\n\n")}\n`,
+              );
+            }
             return;
           }
           process.exitCode = await runUpdater(config.tools, updaterDeps);
