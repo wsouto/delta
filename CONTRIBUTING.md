@@ -67,7 +67,7 @@ bun run check
 bun run build
 ./delta --help
 ./delta --version
-./delta --print-config-path
+./delta config-path
 ```
 
 Run any additional formatting, Markdown, or TOML checks configured by the
@@ -121,7 +121,7 @@ bun install --frozen-lockfile
 bun run build
 ./delta --help
 ./delta --version
-./delta --print-config-path
+./delta config-path
 
 git worktree remove "$WORKTREE"
 git branch -d "$BRANCH"

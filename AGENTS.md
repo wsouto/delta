@@ -76,7 +76,7 @@ Select it with `--config <path>`; otherwise Delta uses
   `git tag -s`, even when the local Git configuration does not enforce tag signing.
 - **`editToolToml` is intentionally preservation-only.** It rewrites field lines in
   place without re-flowing comments, indentation, or quote spacing. When a
-  contributor runs `delta --config tools.toml --edit <tool>`, the output keeps
+  contributor runs `delta --config tools.toml edit <tool>`, the output keeps
   whatever the user wrote; **`taplo` lint** defaults accept that — formatter
   defaults do not. If lint ever flags a runtime emit, the writer is not the bug;
   fix the input or harden the writer; do not suppress.
@@ -89,13 +89,13 @@ Select it with `--config <path>`; otherwise Delta uses
 
 ## Adding a Tool
 
-Run `bun run index.ts --add <tool>` to collect the required fields interactively.
+Run `bun run index.ts add <tool>` to collect the required fields interactively.
 The command writes to the resolved configuration path, rejects duplicate names and
 invalid values, preserves existing tools, and writes atomically.
 
 ## Editing a Tool
 
-Run `bun run index.ts --edit <tool>` to update an existing tool interactively.
+Run `bun run index.ts edit <tool>` to update an existing tool interactively.
 Each prompt is pre-filled with the tool's current value; a missing tool errors
 without prompting, invalid values and cancellation leave stored data unchanged,
 the same values as the current ones are reported as a no-op without rewriting the
@@ -103,7 +103,7 @@ file, and the section-based writer preserves other tools and out-of-scope conten
 
 ## Deleting a Tool
 
-Run `bun run index.ts --delete <tool>` to remove an existing tool interactively.
+Run `bun run index.ts delete <tool>` to remove an existing tool interactively.
 Delta prints the tool's current data, asks for confirmation defaulting to no,
 treats rejection and cancellation identically by reporting `Delete cancelled`
 and leaving data unchanged, and only writes after explicit confirmation.
@@ -112,7 +112,7 @@ final tool is permitted and the resulting file remains a valid TOML document.
 
 ## Listing Tools
 
-Run `bun run index.ts --list` to print each configured tool as a labeled block:
+Run `bun run index.ts list` to print each configured tool as a labeled block:
 
 ```text
 delta
@@ -140,7 +140,7 @@ captured command output as an error and continues with the remaining tools.
 Normal update runs replace a plain-text `delta.log` beside the selected
 configuration. It records timestamps, configured tool commands and versions,
 forwarded updater output, and diagnostic failure details; listing,
-administration, and `--print-config-path` commands do not write it.
+administration, and `config-path` commands do not write it.
 
 Before feature work, read `CONTRIBUTING.md` for branch, verification, pull-request,
 and release workflow, and `ROADMAP.md` for feature requirements and lifecycle steps.
