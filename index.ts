@@ -510,7 +510,7 @@ export function buildProgram(deps: CliDeps = {}): Command {
   const program = new Command()
     .name("delta")
     .description("Keep curated CLI tools up to date against their latest GitHub releases")
-    .version("0.4.1")
+    .version("0.5.0")
     .option("--config <path>", "read/write tool configuration at this path")
     .action(async (options: { config?: string }) => {
       const baseDeps = depsFor();
