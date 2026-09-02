@@ -343,10 +343,9 @@ async function processTool(tool: Tool, deps: UpdaterDeps): Promise<boolean> {
     deps.out(`${picocolors.blue(`${tool.bin}:`)} installed=${current} latest=unknown\n`);
     const status = (e as { status?: number } | null)?.status;
     deps.err(
-      `${picocolors.bold(picocolors.red("[error]"))} ${
-        status === 404
-          ? `No GitHub release found for ${tool.repo}`
-          : `Failed to get latest version for ${tool.repo}`
+      `${picocolors.bold(picocolors.red("[error]"))} ${status === 404
+        ? `No GitHub release found for ${tool.repo}`
+        : `Failed to get latest version for ${tool.repo}`
       }\n`,
     );
     deps.diagnostic?.(
@@ -453,7 +452,7 @@ async function writeConfig(configPath: string, source: string, deps: CliDeps): P
     )(temporaryPath, source);
     await (deps.renameFile ?? rename)(temporaryPath, configPath);
   } catch (error) {
-    await (deps.removeFile ?? unlink)(temporaryPath).catch(() => {});
+    await (deps.removeFile ?? unlink)(temporaryPath).catch(() => { });
     throw error;
   }
 }
@@ -607,7 +606,7 @@ export function buildProgram(deps: CliDeps = {}): Command {
             }
 
             await writeConfig(configPath, source, deps);
-            updaterDeps.out(`Added tool ${bin}\n`);
+            updaterDeps.out(`\nAdded tool ${bin}\n`);
             return;
           }
           if (options.edit !== undefined) {
@@ -680,7 +679,7 @@ export function buildProgram(deps: CliDeps = {}): Command {
             }
 
             await writeConfig(configPath, source, deps);
-            updaterDeps.out(`Edited tool ${bin}\n`);
+            updaterDeps.out(`\nEdited tool ${bin}\n`);
             return;
           }
           if (options.delete !== undefined) {
@@ -697,9 +696,9 @@ export function buildProgram(deps: CliDeps = {}): Command {
 
             updaterDeps.out(
               `Tool: ${current.bin}\n` +
-                `Repository: https://github.com/${current.repo}\n` +
-                `Version command: ${current.versionCmd}\n` +
-                `Update command: ${current.updateCmd}\n`,
+              `Repository: https://github.com/${current.repo}\n` +
+              `Version command: ${current.versionCmd}\n` +
+              `Update command: ${current.updateCmd}\n`,
             );
 
             const confirmation = deps.prompt
@@ -724,7 +723,7 @@ export function buildProgram(deps: CliDeps = {}): Command {
             }
 
             await writeConfig(configPath, candidate, deps);
-            updaterDeps.out(`Deleted tool ${current.bin}\n`);
+            updaterDeps.out(`\nDeleted tool ${current.bin}\n`);
             return;
           }
           terminalUpdaterDeps = updaterDeps;
