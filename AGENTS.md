@@ -1,236 +1,58 @@
-# Project Guidelines
+# Delta Agent Notes
 
-CLI utility that keeps a curated list of CLI tools up to date by comparing the locally installed
-version against the latest GitHub release. `index.ts` is the implementation; run it with
-`bun run index.ts`.
+## Start Here
 
-## What It Does
+- This is a single-package Bun CLI. Production code and command wiring are all in `index.ts`; behavior tests are in
+  `index.test.ts` and import the module through the `import.meta.main` guard.
+- Before changing user-visible behavior, follow the issue, isolated worktree, TDD, draft PR, and changelog lifecycle in
+  `CONTRIBUTING.md`. Small documentation corrections do not require an issue.
+- `tools.toml` is a release/installer template, not source-checkout configuration. Delta reads it only when passed
+  `--config tools.toml`; otherwise it resolves `$XDG_CONFIG_HOME/delta/tools.toml` or `~/.config/delta/tools.toml`.
 
-Delta processes each `[tools.<name>]` table in the resolved configuration file.
-Select it with `--config <path>`; otherwise Delta uses
-`$XDG_CONFIG_HOME/delta/tools.toml` or `~/.config/delta/tools.toml`:
+## Safety And Contracts
 
-1. Runs its configured version command and extracts the first `X.Y.Z` regex match.
-2. Fetches the latest GitHub release tag via `@octokit/rest`'s `repos.getLatestRelease` (no `gh` required).
-3. Runs its configured update command when the versions differ.
+- A normal Delta run executes configured `version_command` and possibly `update_command` values, then replaces
+  `delta.log` beside the selected configuration. Use `--help`, `--version`, `config-path`, or `list` for non-mutating
+  smoke tests.
+- Configured commands are trusted shell input and run as
+  `Bun.spawn(["bash", "-o", "pipefail", "-c", "--", cmd])`. Do not weaken `pipefail` or execute untrusted config.
+- Keep `process.env["TIRITH"] = "0"` at `runUpdater` entry; it prevents the local update gate from prompting. GitHub
+  API authentication intentionally reads only `process.env["GITHUB_TOKEN"]`.
+- Installed versions use the first `[0-9]+\.[0-9]+\.[0-9]+` substring. Release tags must end in stable `X.Y.Z` or
+  `vX.Y.Z`; preserve this strict comparison unless the product policy changes.
+- Configuration has two validation boundaries: `parseTools` rejects an invalid file before any update, while
+  `runUpdater` validates injected tools individually, continues after failures, and returns aggregate status `1`.
+- Tool administration always targets the resolved configuration path. Only `add` may create a missing configuration;
+  `edit` and `delete` must fail without writing when the tool is absent.
+- Keep administration prompts injectable through `buildProgram` dependencies. Trim submitted values, share add/edit
+  validation, leave storage untouched on cancellation or rejected deletion, and skip the write for a no-op edit.
+- `editToolToml` and `deleteToolToml` are preservation-only writers. Keep comments, indentation, quote spacing, line
+  endings, unrelated sections, and surrounding blank lines byte-stable outside the targeted values/section; do not
+  replace them with TOML reserialization. Deletion ends at the next line whose trimmed text starts with `[` or EOF,
+  and deleting the final tool may leave an empty valid TOML document.
+- Configuration writes are temporary-file-plus-rename atomic and remove the temporary file on failure.
+- `install.sh` preserves an existing user config. Release workflow and installer must agree on the stable asset name
+  `delta-linux-x64.tar.gz`.
 
-## Repo Layout
+## Tests And Verification
 
-- `index.ts` — implementation and CLI; tool definitions come from the resolved configuration file, not the source.
-- `index.test.ts` — `bun:test` behavior tests; injects fakes at the system boundaries.
-- `tools.toml` — tracked example configuration; it is not loaded unless selected with `--config`.
-- `install.sh` — download + atomic install script fetched by the `[tools.delta]`
-  `update_command`; bootstraps the default `tools.toml` from the release archive
-  on first install.
-- `README.md` — user-facing usage and development notes.
-- `CHANGELOG.md` — release notes (Keep a Changelog 1.1.0); entries land in
-  `## [Unreleased]` when the change lands and are curated by hand. The
-  `bun run changelog` script is available as a manual aid for inspecting the
-  Git history; the documented workflow does not regenerate the file from it.
-- `openspec/` — OpenSpec change proposals and capability specs.
-- `CONTRIBUTING.md` — branch, verification, pull-request, and release workflow.
-- `ROADMAP.md` — feature requirements and lifecycle steps.
-- `lefthook.yml` and `.github/workflows/` — local hooks plus CI and release automation.
+- Install reproducibly with `bun install --frozen-lockfile`.
+- Run one file with `bun test ./index.test.ts`; focus a test or suite with
+  `bun test ./index.test.ts --test-name-pattern '<regex>'`.
+- Tests stay in-process: inject through `runUpdater(tools, deps)` and `buildProgram(deps)`, not subprocess calls to
+  `bun run index.ts`. Keep ANSI stripping in capture writers because `picocolors` output changes under a TTY.
+- The full gate is `bun run check` (`typecheck -> oxlint -> taplo lint -> bun test`), then `bun run build`. Finish with
+  `./delta --help`, `./delta --version`, and `./delta config-path`; `delta` is a gitignored build artifact.
+- The pre-commit hook additionally requires `gitleaks` on `PATH` and scans staged content. Commit messages are checked
+  as Conventional Commits; repository workflow uses signed commits.
+- When changing project Markdown, run Markdownlint on the modified file. Run Taplo lint on every modified project TOML
+  file; formatting TOML is not interchangeable with the preservation-only runtime writer.
 
-## Hard-Won Context
+## Release Constraints
 
-- **`TIRITH=0` is load-bearing.** Set at `runUpdater` entry so the local update gate doesn't
-  prompt during updates. Preserve it unless the gate's policy changes.
-- **`GITHUB_TOKEN` is the only auth env var.** No `GH_TOKEN` fallback. Unauthenticated
-  requests work at 60 req/hr, which is plenty for three tools.
-- **Version parsing is intentionally strict.** Installed output uses the first
-  `[0-9]+\.[0-9]+\.[0-9]+` substring. Release tags must end with stable `X.Y.Z`
-  or `vX.Y.Z`; the numeric suffix is compared.
-- **`import.meta.main` guards the CLI.** `parseAsync(process.argv)` only runs when `index.ts`
-  is the entry. Tests import the module without triggering it.
-- **Configured commands run in child Bash processes.**
-  `Bun.spawn(["bash","-o","pipefail","-c","--",cmd])` supports arguments and pipelines without
-  `eval`. Commands are trusted configuration values; never execute untrusted configuration.
-- **Configuration validation has two layers.** `parseTools` rejects malformed TOML,
-  schema errors, and invalid GitHub repository URLs with `ConfigError` before updates.
-  `runUpdater` validates each injected tool, reports invalid entries, continues with
-  remaining tools, and returns `1` when any tool fails.
-- **Self-update rides a repo-root `install.sh`.** The `[tools.delta]` `update_command`
-  is a single `curl -fsSL https://raw.githubusercontent.com/wsouto/delta/main/install.sh | sh`;
-  the script owns download + atomic install and creates the default configuration
-  from its bundled `tools.toml` only when it is missing. Keep `release.yml` publishing
-  the version-stable asset `delta-linux-x64.tar.gz` — the v0.1.0 asset was misnamed
-  (`delta-v0.1.0-linux-x64.tar.gz`) and silently broke the stable download URL.
-- **Sign releases.** Every commit uses `git commit -S`; release tags use
-  `git tag -s`, even when the local Git configuration does not enforce tag signing.
-- **`editToolToml` is intentionally preservation-only.** It rewrites field lines in
-  place without re-flowing comments, indentation, or quote spacing. When a
-  contributor runs `delta --config tools.toml edit <tool>`, the output keeps
-  whatever the user wrote; **`taplo` lint** defaults accept that — formatter
-  defaults do not. If lint ever flags a runtime emit, the writer is not the bug;
-  fix the input or harden the writer; do not suppress.
-- **`deleteToolToml` follows the same preservation-only contract as `editToolToml`.**
-  It drops the matched `[tools.<bin>]` section — exactly the lines from its
-  header through the next column-0 `[` header or EOF — without re-flowing
-  comments, indentation, or quote spacing, and without touching surrounding
-  blank lines, in surviving sections. Empty or whitespace-only files are valid
-  TOML documents, so deleting the final configured tool is permitted.
-
-## Adding a Tool
-
-Run `bun run index.ts add <tool>` to collect the required fields interactively.
-The command writes to the resolved configuration path, rejects duplicate names and
-invalid values, preserves existing tools, and writes atomically.
-
-## Editing a Tool
-
-Run `bun run index.ts edit <tool>` to update an existing tool interactively.
-Each prompt is pre-filled with the tool's current value; a missing tool errors
-without prompting, invalid values and cancellation leave stored data unchanged,
-the same values as the current ones are reported as a no-op without rewriting the
-file, and the section-based writer preserves other tools and out-of-scope content.
-
-## Deleting a Tool
-
-Run `bun run index.ts delete <tool>` to remove an existing tool interactively.
-Delta prints the tool's current data, asks for confirmation defaulting to no,
-treats rejection and cancellation identically by reporting `Delete cancelled`
-and leaving data unchanged, and only writes after explicit confirmation.
-Section removal preserves surviving tools and out-of-scope content; deleting the
-final tool is permitted and the resulting file remains a valid TOML document.
-
-## Listing Tools
-
-Run `bun run index.ts list` to print each configured tool as a labeled block:
-
-```text
-delta
-  Repository:      https://github.com/wsouto/delta
-  Version command: delta --version
-  Update command:  curl -fsSL https://example.test/install.sh | sh
-```
-
-Command text is printed verbatim. Listing only reads and validates the resolved
-configuration, runs no version or update commands, and honors `--config <path>`;
-only the tool name is bold when the terminal supports it.
-
-For manual configuration, define one `[tools.<name>]` table. The table name is a
-user-facing identifier. Delta runs `version_command` directly, so the command may
-use an executable name different from the table name. Every field is required:
-
-- `repository` — GitHub repository URL resolved by `@octokit/rest`'s `getLatestRelease`.
-- `version_command` — command whose output contains an `X.Y.Z` version.
-- `update_command` — command run when installed and latest versions differ. It runs
-  in a child bash process; keep it a trusted configuration command.
-
-If a configured command is unavailable or exits unsuccessfully, Delta reports the
-captured command output as an error and continues with the remaining tools.
-
-Normal update runs replace a plain-text `delta.log` beside the selected
-configuration. It records timestamps, configured tool commands and versions,
-forwarded updater output, and diagnostic failure details; listing,
-administration, and `config-path` commands do not write it.
-
-Before feature work, read `CONTRIBUTING.md` for branch, verification, pull-request,
-and release workflow, and `ROADMAP.md` for feature requirements and lifecycle steps.
-
-## Feature Workflow Is Mandatory
-
-Every new feature, behavior change, or roadmap checkbox lands through the full
-`CONTRIBUTING.md` lifecycle unless the user explicitly opts out for the
-specific task:
-
-1. Open an issue before changing user-visible behavior.
-2. Build the work in an isolated `feat/<issue-number>-<short-kebab-slug>`
-   worktree from `<base-remote>/main`; do not mutate the main checkout.
-3. Cover behavior in `bun:test` first (TDD); verify each slice.
-4. Run the full local gate (`bun run check`, `bun run build`, the non-mutating
-   compiled smoke tests) before requesting review.
-5. Open a draft pull request targeting `main` with `Summary`, `Acceptance`,
-   `Verification`, and `Related issue` sections and `Closes #<n>`.
-6. Add a `CHANGELOG.md` entry under `## [Unreleased]` while the impact is
-   still fresh (curation happens at release time).
-7. After the pull request is merged, complete the cleanup: archive the
-   OpenSpec change, sync the modified-capability spec, remove the worktree,
-   delete the local branch **and** delete the GitHub-side branch
-   (`gh api -X DELETE /repos/<owner>/<repo>/git/refs/heads/<branch>` or the
-   web UI's "Delete branch" button), then prune remote-tracking refs
-   (`git fetch origin --prune`). The CONTRIBUTING.md after-merge snippet
-   only cleans local refs; do not stop there.
-
-Treat `CONTRIBUTING.md` as load-bearing. Skipping any step without an explicit
-user instruction leaves the repository in a state the next contributor cannot
-trust.
-
-## Verification
-
-```sh
-bun run check   # typecheck + lint + tests
-bun test        # bun:test only
-bun run build   # bun build --compile --outfile delta (gitignored)
-```
-
-The test suite is in-process; never call `bun run index.ts` from a test.
-
-## Changelog
-
-Changelog and versioning conventions live in `CONTRIBUTING.md` (Releasing);
-follow them when adding entries and when cutting a release. The published
-**tag** is the source of truth for the version; `package.json` and
-`index.ts` `.version(...)` are bumped to match it at release time. The
-`bun run changelog` script (a thin wrapper around `auto-changelog`) remains
-available as a manual aid for inspecting Git history; the documented workflow
-does not regenerate `CHANGELOG.md` from it.
-
----
-
-## Bun Stack
-
-### Toolchain
-
-- Runtime: Bun 1.4.x. `index.ts` is the ESM module entry; the `#!/usr/bin/env bun` shebang is load-bearing.
-- CLI surface: `commander` (parsing), `picocolors` (colors), `valibot` (tools configuration schema
-  - `v.InferOutput` types), `@octokit/rest` (`rest.repos.getLatestRelease`).
-- Tests: `bun:test`, in-process.
-- Lint / Format: `oxlint` + `oxfmt` (paired).
-- Type check: `tsc --noEmit`. TypeScript is in `devDependencies` at `^7`. Never
-  - `peerDependencies` for a `"private": true` package.
-- Hooks: `@evilmartians/lefthook` runs typecheck, lint, and staged TypeScript tests
-  as separate pre-commit commands; `@commitlint` validates commit messages.
-
-### Scripts
-
-| Command                           | What it runs                                     |
-| --------------------------------- | ------------------------------------------------ |
-| `bun run test`                    | `bun test`                                       |
-| `bun run lint` / `lint:fix`       | `oxlint` / `oxlint --fix`                        |
-| `bun run format` / `format:check` | `oxfmt` / `oxfmt --check`                        |
-| `bun run lint:toml`               | `taplo lint`                                     |
-| `bun run format:toml`             | `taplo format`                                   |
-| `bun run typecheck`               | `tsc --noEmit`                                   |
-| `bun run check`                   | typecheck + lint + TOML + test — full local gate |
-| `bun run build`                   | `bun build --compile --outfile delta` gitignored |
-| `bun run start`                   | `bun run index.ts`                               |
-
-### Discipline
-
-- **Pre-commit hooks run typecheck, lint, and staged TypeScript tests separately via lefthook.**
-  `bun run check` is the full local gate, not the hook command itself.
-- **CI-skip markers are optional, not automatic.** For docs-only commits, use
-  GitHub’s `[skip ci]` marker (with a space, not `[skip-ci]`) only when
-  maintainers have confirmed skipped checks will not block the pull request;
-  skipped required checks remain pending.
-- **Always lint `AGENTS.md`, `CONTRIBUTING.md`, and `README.md` with `markdownlint` when modifications are done.**
-- **Never lint other Markdown files.**
-- **Always lint project TOML files with `taplo`.** Run it on every `*.toml`,
-  including `tools.toml`, before committing. Fix violations; do not suppress them.
-- **`delta` is gitignored.** `bun build --compile` writes the binary to repo root; do not
-  remove the `.gitignore` entry.
-- **Tests are in-process.** Updater tests inject fakes at the system boundaries
-  (`runShell` → `Bun.spawn(["bash","-o","pipefail","-c","--",cmd])`,
-  `getLatestTag` → octokit). CLI tests use `buildProgram().exitOverride()` + a capture
-  helper; do not fork `bun run index.ts` per assertion.
-- **The updater seam is `runUpdater(tools, deps)`.** All updater tests go through it via the
-  `captureUpdater` helper. picocolors auto-detects TTY, so the helper's `out`/`err` writers
-  strip ANSI before storing — without it, `bun test` runs fail under TTY and silently pass
-  when stdout is redirected. Keep the strip; do not point stdout to a file to bypass.
-- **The published tag is the source of truth.** `package.json` and
-  `index.ts` `.version(...)` must match the tag at release time; never move,
-  replace, or reuse a published tag.
-- **`process.env` needs bracket access** (`process.env["GITHUB_TOKEN"]`) —
-  `noPropertyAccessFromIndexSignature` rejects dot access.
+- The published tag is the version source of truth. At release time, keep the tag, `package.json`, and
+  `buildProgram().version(...)` value in `index.ts` identical; sign release tags and never move or reuse one.
+- Curate `CHANGELOG.md` by hand under `## [Unreleased]`. `bun run changelog` is only an inspection aid and must not
+  regenerate the maintained changelog.
+- Publishing a GitHub Release triggers `.github/workflows/release.yml`; it builds Linux x64 from the release tag and
+  uploads `delta-linux-x64.tar.gz`.
